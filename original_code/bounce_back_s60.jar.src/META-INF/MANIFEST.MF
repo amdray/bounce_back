@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+MicroEdition-Configuration: CLDC-1.0
+MIDlet-Name: Bounce Back
+Created-By: 1.4.1_02 (Sun Microsystems Inc.)
+MIDlet-Vendor: Nokia
+MIDlet-1: Bounce Back, /res/i, CrystalMidlet
+MIDlet-Version: 1.13
+MicroEdition-Profile: MIDP-1.0
+
