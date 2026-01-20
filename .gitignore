@@ -23,3 +23,6 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# Local scratch
+_ul
