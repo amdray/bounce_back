@@ -26,3 +26,6 @@ build/
 
 # Local scratch
 _ul
+
+# Reverse engineering sources (local only)
+original_code/
