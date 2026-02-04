@@ -1,0 +1,65 @@
+if0: chunks=104
+  magic_counts: PNG=104
+  #000 size=  176 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  #001 size=  151 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  ... (102 more)
+
+if1: chunks=7
+  magic_counts: PNG=7
+  #000 size=  150 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  #001 size=  164 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  ... (5 more)
+
+if2: chunks=7
+  magic_counts: PNG=7
+  #000 size=  195 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  #001 size=  166 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  ... (5 more)
+
+ib0: chunks=1
+  magic_counts: PNG=1
+  #000 size=  995 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+
+ic: chunks=12
+  magic_counts: PNG=12
+  #000 size=  990 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  #001 size=  393 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  ... (10 more)
+
+im: chunks=5
+  magic_counts: PNG=5
+  #000 size= 8020 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  #001 size=  658 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  ... (3 more)
+
+b: chunks=26
+  magic_counts: PNG=25 unknown=1
+  #000 size=  837 magic=unknown  head16=02101000000000000101010101010000
+  #001 size=  251 magic=PNG      head16=89504e470d0a1a0a0000000d49484452
+  ... (24 more)
+
+bg: chunks=3
+  magic_counts: unknown=3
+  #000 size=   37 magic=unknown  head16=000100210101000060600202ff000000
+  #001 size=    2 magic=unknown  head16=0000
+  ... (1 more)
+
+s: chunks=11
+  magic_counts: unknown=11
+  #000 size=   28 magic=unknown  head16=024a3a798dc9e5cdd185b131bdcd951d
+  #001 size=   30 magic=unknown  head16=024a3a798dc9e5cdd185b131bdcd951d
+  ... (9 more)
+
+r: raw size=217 magic=unknown head16=002d0000001501007500000001010086
+
+tf: chunks=2
+  magic_counts: unknown=2
+  #000 size= 3932 magic=unknown  head16=6f6801010c0c756e7f807f00007f1400
+  #001 size=  319 magic=unknown  head16=6e01680002000000006f016900020000
+
+lf: chunks=44
+  magic_counts: unknown=44
+  #000 size=    7 magic=unknown  head16=010801000d0200
+  #001 size=  962 magic=unknown  head16=1430716f6e6e6e6e6e6e6e6e6e6e6e6e
+  ... (42 more)
+

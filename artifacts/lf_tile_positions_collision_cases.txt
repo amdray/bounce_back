@@ -1,0 +1,27 @@
+tileId=4 total=4 levels=3
+  L04 map=30x48 cnt=1 first=(14,42,flag80=0)
+  L08 map=50x60 cnt=1 first=(19,24,flag80=0)
+  L14 map=60x46 cnt=2 first=(47,25,flag80=0), (54,37,flag80=0)
+
+tileId=53 total=2 levels=2
+  L05 map=68x45 cnt=1 first=(9,31,flag80=0)
+  L20 map=40x48 cnt=1 first=(14,28,flag80=0)
+
+tileId=102 total=48 levels=16
+  L00 map=48x20 cnt=1 first=(43,17,flag80=0)
+  L01 map=60x24 cnt=2 first=(35,16,flag80=0), (4,19,flag80=0)
+  L02 map=90x24 cnt=4 first=(25,4,flag80=0), (87,4,flag80=0), (74,12,flag80=0), (36,18,flag80=0)
+  L03 map=105x24 cnt=5 first=(5,6,flag80=0), (80,6,flag80=0), (33,11,flag80=0), (3,18,flag80=0), (38,19,flag80=0)
+  L05 map=68x45 cnt=2 first=(26,12,flag80=0), (41,39,flag80=0)
+  L06 map=45x48 cnt=3 first=(20,4,flag80=0), (39,12,flag80=1), (37,37,flag80=1)
+  L08 map=50x60 cnt=3 first=(48,21,flag80=0), (46,30,flag80=0), (16,51,flag80=0)
+  L09 map=60x48 cnt=5 first=(30,32,flag80=0), (41,32,flag80=0), (56,32,flag80=0), (56,40,flag80=0), (28,42,flag80=0)
+  L10 map=38x60 cnt=2 first=(11,13,flag80=0), (8,41,flag80=0)
+  L13 map=50x84 cnt=2 first=(25,4,flag80=0), (25,69,flag80=1)
+  L15 map=72x50 cnt=2 first=(31,15,flag80=0), (17,36,flag80=0)
+  L16 map=60x70 cnt=6 first=(12,22,flag80=0), (20,27,flag80=0), (35,29,flag80=0), (6,37,flag80=0), (6,43,flag80=0)
+  L17 map=47x90 cnt=5 first=(33,57,flag80=0), (5,61,flag80=0), (20,62,flag80=0), (12,69,flag80=0), (35,77,flag80=0)
+  L18 map=60x70 cnt=2 first=(13,3,flag80=0), (56,45,flag80=0)
+  L19 map=60x60 cnt=2 first=(58,28,flag80=0), (56,44,flag80=0)
+  L20 map=40x48 cnt=2 first=(8,28,flag80=0), (8,33,flag80=0)
+

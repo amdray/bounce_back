@@ -20,10 +20,75 @@
 
 ## Текущий статус проекта
 
-- Стадия: исследование / анализ / инструментарий
-- Целевая платформа (план): Sony PSP
-- Язык реализации порта (план): C / C++ (PSPSDK)
-- Конвертация ассетов: не выполняется (ориентация на прямое чтение оригинальных данных)
+### Реализовано (minimal bring-up на PSP)
+
+**Код:** `src/main.c`, `src/resource_loader.h/c`, `Makefile`
+
+- ✅ PSP callbacks (HOME button)
+- ✅ SDL2 + SDL2_image инициализация
+- ✅ ResourceLoader для c.java контейнеров (big-endian)
+- ✅ Загрузка и рендеринг первого ball sprite из /res/b
+- ✅ Makefile для PSPSDK (PSP_LARGE_MEMORY=1)
+
+**Сборка:**
+```bash
+# В WSL/Linux (требуется $PSPDEV)
+make
+```
+
+> Примечание: `make` копирует оригинальные ресурсы из `original_code/bounce_back_s60.jar.src/res/` в `release/res/`.  
+> Путь можно переопределить: `make ORIGINAL_RES_DIR=/path/to/res`.
+
+**Результат:** `release/EBOOT.PBP` с тестовым экраном (ball sprite в центре 480×272)
+
+### Следующие этапы (не реализовано)
+
+- Перенос тайлового движка (рендер tileMap из /res/lf)
+- Система коллизий (g.collisionTest + маски)
+- Игровой цикл h.run() (50ms tick + inputMask)
+- Камера (smooth follow + deadzone)
+- Враги и движущиеся объекты
+
+### Общая информация
+
+- Стадия: минимальный bring-up выполнен (resource loading + SDL2 test)
+- Целевая платформа: Sony PSP (PSPSDK, C, SDL2)
+- Язык реализации: C (PSP toolchain, WSL/Linux build)
+- Конвертация ассетов: не выполняется (прямое чтение оригинальных c.java контейнеров)
+
+---
+
+## Правила порта на PSP
+
+### 1. Расширение экрана до размеров PSP
+
+**Оригинал (J2ME):** 176×208 пикселей  
+**PSP:** 480×272 пикселей
+
+**Решение:**
+- Увеличиваем viewport (обзор на уровень) без изменения размера тайлов
+- **Pixel-perfect рендеринг** уровня сохраняется (16×16 тайлы остаются 16×16)
+- Игрок видит больше игрового пространства (wider field of view)
+- UI масштабируется или перепозиционируется под широкий экран
+
+**Viewport:**
+- J2ME: ~11×13 тайлов (176÷16 × 208÷16)
+- PSP: ~30×17 тайлов (480÷16 × 272÷16)
+
+### 2. Камера и физика камеры
+
+**Источник:** `bounce_zero/src/camera.c` и `bounce_zero/src/camera.h`
+
+**Принципы:**
+- Плавное следование за игроком (smooth camera)
+- Deadzone (мертвая зона) в центре экрана
+- Ограничения по границам уровня (clamp/wrap)
+- Поддержка shake эффектов
+
+**Интеграция:**
+- Использовать готовую реализацию из bounce_zero
+- Адаптировать под размеры PSP viewport (480×272)
+- Синхронизировать с tick rate 50ms (20 FPS)
 
 ---
 
@@ -39,13 +104,35 @@
 │       ├── *.java               # Логика игры, UI, движок, физика
 │       └── res/                 # Оригинальные бинарные ресурсы (lf, tf, if*, bg, b, r и др.)
 │
-├── generate_maps_from_lf.py     # Парсер уровней (res/lf) и сборка карт
-├── parse_tf_textures&animations.py
-│                                # Анализ формата тайлов (res/tf), анимаций и флагов
-├── count_tiles_on_levels.py     # Статистика распределения тайлов по уровням
-├── tile_to_texture_mapping.py  # Соответствие ID тайлов и графических ресурсов
-├── tile_mapping_table.txt      # Табличное представление свойств тайлов
-├── tile_types_documentation.md # Документация по типам тайлов и коллизиям
+├── docs/
+│   ├── DEOBFUSCATION.md             # Справочник по деобфускации: классы/поля/форматы ресурсов
+│   ├── GAME_LOOP_SPEC.md            # “Исполняемая модель” тика 50ms (контракт game loop)
+│   ├── COLLISION_CONTRACT.md        # Контракт коллизий (g.collisionTest): collisionType/transform/aux + кейсы
+│   ├── BRING_UP.md                  # Чеклист/контракты для первого запуска (bring-up) на PSP/SDL2
+│   ├── MEMORY_ANALYSIS.md           # Анализ памяти/VRAM и рекомендации
+│   ├── original-code-review.md      # Заметки по обзору исходников/архитектуры
+│   └── tile_types_documentation.md  # Документация по типам тайлов и коллизиям
+│
+├── artifacts/
+│   ├── tile_mapping_table.txt                   # Табличное представление свойств тайлов
+│   ├── lf_enemies_dump.txt                      # Сгенерированный текстовый дамп врагов по всем уровням
+│   ├── lf_tile_positions_collision_cases.txt    # Сгенерированные позиции tileId для collision кейсов
+│   ├── tf_tiles_dump.txt                        # Сгенерированный дамп метаданных /res/tf (все тайлы)
+│   ├── tf_inline_masks_runtime.txt              # Сгенерированные inline-маски (runtime-ориентация)
+│   ├── res_container_signatures.txt             # Сигнатуры chunk'ов /res/* (PNG/unknown), для проверки форматов
+│   └── tile_counts_report.txt                   # Сгенерированная статистика тайлов (вывод count_tiles_on_levels.py)
+│
+├── scripts/
+│   ├── generate_maps_from_lf.py                 # Парсер уровней (res/lf) и сборка карт
+│   ├── parse_tf_textures&animations.py          # Анализ формата тайлов (res/tf), анимаций и флагов
+│   ├── count_tiles_on_levels.py                 # Статистика распределения тайлов по уровням
+│   ├── dump_lf_enemies.py                       # Дамп enemy records из /res/lf (9 байт) + нормализация как в h.b(level)
+│   ├── dump_lf_tile_positions.py                # Поиск tileId по уровням (/res/lf tileMap): позиции и флаг 0x80
+│   ├── dump_tf_tiles.py                         # Дамп /res/tf: v/T/transform/collisionType/aux (+ вывод inline mask)
+│   ├── dump_res_container_signatures.py         # Определение форматов chunk'ов в /res/* (PNG/JPEG/raw), для bring-up
+│   ├── tile_to_texture_mapping.py               # Соответствие ID тайлов и графических ресурсов
+│   ├── analyze_memory_requirements.py           # Анализ требований к памяти (PSP)
+│   └── analyze_splash_screens.py                # Анализ заставок/меню/UI (PSP)
 ├── gifs/                        # Визуализация уровней (отладочные GIF)
 └── README.md                    # Текущая документация проекта
 ```
@@ -58,17 +145,97 @@
 
 Их задача — зафиксировать формат данных и поведение движка, чтобы в дальнейшем реализовать эквивалентную логику на PSPSDK без конвертации ассетов.
 
-- `generate_maps_from_lf.py`  
+- [`DEOBFUSCATION.md`](docs/DEOBFUSCATION.md)  
+  Сводный “справочник по именам”: какие классы за что отвечают, какие поля что значат, и какие форматы `/res/*` уже подтверждены.
+
+- [`GAME_LOOP_SPEC.md`](docs/GAME_LOOP_SPEC.md)  
+  50ms tick как контракт порта: порядок стадий `h.run()`, pipeline ввода press/release → `inputMask`, и что жёстко привязано к тику.
+
+- [`COLLISION_CONTRACT.md`](docs/COLLISION_CONTRACT.md)  
+  Самая рискованная часть порта: точная семантика `g.collisionTest(...)`, `collisionType`, `transform`, `aux`-alias, ориентация масок, и минимальные проверяемые кейсы из реальных уровней.
+
+- [`BRING_UP.md`](docs/BRING_UP.md)  
+  Что именно нужно сделать для “первого запуска” (bring-up) без gameplay: загрузка `/res/tf/lf/if*`, статический рендер tileMap, анимации (`renderType=3`) и диагностические маркеры.
+
+- `scripts/generate_maps_from_lf.py`  
   Десериализация уровней из `res/lf`, сборка тайловых карт и проверка структуры данных.
 
-- `parse_tf_textures&animations.py`  
+- `scripts/parse_tf_textures&animations.py`  
   Анализ формата `res/tf`: свойства тайлов, типы коллизий, анимации, флаги трансформаций.
 
-- `count_tiles_on_levels.py`  
+- `scripts/count_tiles_on_levels.py`  
   Сбор статистики использования тайлов по всем уровням.
 
-- `tile_to_texture_mapping.py`  
+- [`dump_lf_enemies.py`](scripts/dump_lf_enemies.py)  
+  Дамп “врагов/moving objects” из `/res/lf` (каждый объект — 9 байт), включая нормализацию координат/скоростей как в `h.b(level)`. Нужен, чтобы порт врагов не был гаданием.
+
+- [`dump_lf_tile_positions.py`](scripts/dump_lf_tile_positions.py)  
+  Поиск tileId по всем уровням в tileMap (/res/lf): выдаёт позиции (tileX,tileY) и флаг `0x80` (bg-fill). Нужен, чтобы привязывать “тайл X реально встречается вот здесь” в документах/контрактах.
+
+- [`dump_tf_tiles.py`](scripts/dump_tf_tiles.py)  
+  Текстовый дамп `/res/tf` (метаданные тайлов): `renderType`, `imageIndex`, `transform`, `collisionType`, `aux`, и (опционально) inline-маски в **runtime-ориентации**. Нужен, чтобы `docs/COLLISION_CONTRACT.md` опирался на проверяемые артефакты.
+
+- [`dump_res_container_signatures.py`](scripts/dump_res_container_signatures.py)  
+  Проверка форматов chunk’ов в `/res/*` (контейнеры и raw файлы): помогает доказать “это PNG” до переноса декодера на PSP.
+
+- `scripts/tile_to_texture_mapping.py`  
   Связь логических ID тайлов с графическими ресурсами (`if0`, `if1`, `ic`).
+
+---
+
+## Документация по тайлам (контент/поведение)
+
+- [`tile_types_documentation.md`](docs/tile_types_documentation.md)  
+  Конкретные tileId и их поведение (триггеры, бонусы, “спешалы”), с привязкой к исходникам.
+
+- [`tile_mapping_table.txt`](artifacts/tile_mapping_table.txt)  
+  Быстрая таблица “tileId → текстура/слой/параметры” для ручной проверки и сопоставления.
+
+---
+
+## Сгенерированные дампы (чтобы не забыть, откуда “факты”)
+
+Эти файлы — **не ручные заметки**, а воспроизводимые артефакты, сгенерированные из оригинальных ресурсов в `original_code/.../res/*`. Их удобно ссылать в документации, чтобы любые утверждения можно было перепроверить.
+
+- [`lf_enemies_dump.txt`](artifacts/lf_enemies_dump.txt)  
+  Полный дамп врагов по уровням:  
+  `python3 scripts/dump_lf_enemies.py --out artifacts/lf_enemies_dump.txt`
+
+- [`tf_tiles_dump.txt`](artifacts/tf_tiles_dump.txt)  
+  Полный дамп метаданных `/res/tf`:  
+  `python3 scripts/dump_tf_tiles.py > artifacts/tf_tiles_dump.txt`
+
+- [`tf_inline_masks_runtime.txt`](artifacts/tf_inline_masks_runtime.txt)  
+  Inline‑маски (runtime‑ориентация) для выбранных tileId:  
+  `python3 scripts/dump_tf_tiles.py --dump-mask 3 --dump-mask 52 --dump-mask 97 > artifacts/tf_inline_masks_runtime.txt`
+
+- [`res_container_signatures.txt`](artifacts/res_container_signatures.txt)  
+  Сигнатуры chunk’ов `/res/*` (PNG/unknown + head bytes):  
+  `python3 scripts/dump_res_container_signatures.py > artifacts/res_container_signatures.txt`
+
+- [`lf_tile_positions_collision_cases.txt`](artifacts/lf_tile_positions_collision_cases.txt)  
+  Позиции tileId в уровнях (для кейсов в `docs/COLLISION_CONTRACT.md`):  
+  `python3 scripts/dump_lf_tile_positions.py --tile 4 --tile 53 --tile 102 > artifacts/lf_tile_positions_collision_cases.txt`
+
+- [`tile_counts_report.txt`](artifacts/tile_counts_report.txt)  
+  Статистика tileId по всем уровням:  
+  `python3 scripts/count_tiles_on_levels.py > artifacts/tile_counts_report.txt`
+
+---
+
+## Анализ требований к памяти
+
+- [`MEMORY_ANALYSIS.md`](docs/MEMORY_ANALYSIS.md)  
+  Полный анализ требований к памяти для PSP: размеры ресурсов, распакованных текстур, runtime overhead, VRAM allocation, рекомендации по оптимизации.  
+  **Результат:** все ресурсы занимают менее 1% памяти PSP (0.2-0.6 MB из 24 MB).
+
+- [`analyze_memory_requirements.py`](scripts/analyze_memory_requirements.py)  
+  Скрипт анализа контейнеров, уровней и общих требований к памяти:  
+  `python3 scripts/analyze_memory_requirements.py`
+
+- [`analyze_splash_screens.py`](scripts/analyze_splash_screens.py)  
+  Детальный анализ заставок, меню и UI элементов (размеры в RGBA32/RGB565/RGBA4444):  
+  `python3 scripts/analyze_splash_screens.py`
 
 ---
 
@@ -93,8 +260,33 @@
 
 ---
 
-## Следующие этапы (не реализовано)
+## PSP порт (PSPSDK) - текущий статус
 
-- Реализация загрузчика ресурсов (аналог `c.java`) на C/C++
-- Перенос тайлового движка и системы коллизий
-- Реализация игрового цикла и управления под PSP
+### Реализовано (minimal bring-up)
+
+**Код:** `src/main.c`, `src/resource_loader.h/c`, `Makefile`
+
+- ✅ PSP callbacks (HOME button)
+- ✅ SDL2 + SDL2_image инициализация
+- ✅ ResourceLoader для c.java контейнеров (big-endian)
+- ✅ Загрузка и рендеринг первого ball sprite из /res/b
+- ✅ Makefile для PSPSDK (PSP_LARGE_MEMORY=1)
+
+**Сборка:**
+```bash
+# В WSL/Linux (требуется $PSPDEV)
+make
+```
+
+> Примечание: `make` копирует оригинальные ресурсы из `original_code/bounce_back_s60.jar.src/res/` в `release/res/`.  
+> Путь можно переопределить: `make ORIGINAL_RES_DIR=/path/to/res`.
+
+**Результат:** `release/EBOOT.PBP` с тестовым экраном (ball sprite в центре)
+
+### Следующие этапы (не реализовано)
+
+- Перенос тайлового движка (рендер tileMap из /res/lf)
+- Система коллизий (g.collisionTest + маски)
+- Игровой цикл h.run() (50ms tick + inputMask)
+- Камера (smooth follow + deadzone)
+- Враги и движущиеся объекты

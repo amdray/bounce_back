@@ -1,0 +1,178 @@
+tf: images=111 (base=104) tile=16x16 tileCount=117 splitIndex=110 clampX=1 clampY=1 tileIdMask=0x7F flagMask=0x80 bgColor(i32)=0x7F00007F animCount=20
+
+tileId  v(render)  T(img)  b(transform)  l(coll)  aux(i32)        note
+-----  ---------  ------  -----------  -------  --------  ---------------------------
+    0          0       0  0x00             0         0  
+    1          0       0  0x00             2         0  solid full-tile
+    2          1       0  0x00             2         0  solid full-tile
+    3          1       1  0x00             1         0  mask inline (16x16 booleans)
+    4          1      53  0x01             3         3  mask alias from tileId=3
+    5          1      54  0x02             3         3  mask alias from tileId=3
+    6          1      55  0x03             3         3  mask alias from tileId=3
+    7          1       2  0x00             2         0  solid full-tile
+    8          1      56  0x01             2         0  solid full-tile
+    9          1       3  0x00             2         0  solid full-tile
+   10          1       4  0x00             2         0  solid full-tile
+   11          3       3  0x00             2         0  solid full-tile; animGroup=0
+   12          1       5  0x00             2         0  solid full-tile
+   13          1       6  0x00             2         0  solid full-tile
+   14          1       7  0x00             2         0  solid full-tile
+   15          3       6  0x00             2         1  solid full-tile; animGroup=1
+   16          1       8  0x00             2         0  solid full-tile
+   17          1       9  0x00             2         0  solid full-tile
+   18          3       8  0x00             2         2  solid full-tile; animGroup=2
+   19          1      10  0x00             2         0  solid full-tile
+   20          1      11  0x00             2         0  solid full-tile
+   21          1      12  0x00             2         0  solid full-tile
+   22          3      10  0x00             2         3  solid full-tile; animGroup=3
+   23          1      13  0x00             2         0  solid full-tile
+   24          1      14  0x00             2         0  solid full-tile
+   25          1      15  0x00             2         0  solid full-tile
+   26          3      13  0x00             2         4  solid full-tile; animGroup=4
+   27          1      16  0x00             2         0  solid full-tile
+   28          1      17  0x00             2         0  solid full-tile
+   29          1      18  0x00             2         0  solid full-tile
+   30          3      16  0x00             2         5  solid full-tile; animGroup=5
+   31          1      19  0x00             2         0  solid full-tile
+   32          1      20  0x00             2         0  solid full-tile
+   33          1      21  0x00             2         0  solid full-tile
+   34          3      19  0x00             2         6  solid full-tile; animGroup=6
+   35          1      22  0x00             0         0  
+   36          1      23  0x00             2         0  solid full-tile
+   37          1      24  0x00             2         0  solid full-tile
+   38          1      25  0x00             2         0  solid full-tile
+   39          3      23  0x00             2         7  solid full-tile; animGroup=7
+   40          1      26  0x00             0         0  
+   41          1      27  0x00             0         0  
+   42          1      28  0x00             0         0  
+   43          3      26  0x00             0         8  animGroup=8
+   44          3      57  0x08             0         9  animGroup=9
+   45          3      60  0x03             0        10  animGroup=10
+   46          1      29  0x00             0         0  
+   47          1      30  0x00             0         0  
+   48          1      31  0x00             0         0  
+   49          3      29  0x00             0        11  animGroup=11
+   50          3      63  0x08             0        12  animGroup=12
+   51          3      66  0x03             0        13  animGroup=13
+   52          1      32  0x00             1         0  mask inline (16x16 booleans)
+   53          1      69  0x03             3        52  mask alias from tileId=52
+   54          1      33  0x00             1         0  mask inline (16x16 booleans)
+   55          1      70  0x03             3        54  mask alias from tileId=54
+   56          1      34  0x00             1         0  mask inline (16x16 booleans)
+   57          1      71  0x03             3        56  mask alias from tileId=56
+   58          1      72  0x02             3        56  mask alias from tileId=56
+   59          1      35  0x00             1         0  mask inline (16x16 booleans)
+   60          1      73  0x03             3        59  mask alias from tileId=59
+   61          1      74  0x02             3        59  mask alias from tileId=59
+   62          1      36  0x00             2         0  solid full-tile
+   63          1      75  0x04             2         0  solid full-tile
+   64          1      76  0x01             2         0  solid full-tile
+   65          1      77  0x03             2         0  solid full-tile
+   66          1      37  0x00             1         0  mask inline (16x16 booleans)
+   67          1      78  0x03             3        66  mask alias from tileId=66
+   68          1      79  0x02             3        66  mask alias from tileId=66
+   69          1      38  0x00             1         0  mask inline (16x16 booleans)
+   70          1      80  0x01             3        69  mask alias from tileId=69
+   71          1      81  0x03             3        69  mask alias from tileId=69
+   72          1      82  0x02             3        69  mask alias from tileId=69
+   73          1      39  0x00             0         0  
+   74          1      83  0x01             0         0  
+   75          1      84  0x03             0         0  
+   76          1      85  0x02             0         0  
+   77          1      40  0x00             2         0  solid full-tile
+   78          1      41  0x00             2         0  solid full-tile
+   79          3      40  0x00             2        14  solid full-tile; animGroup=14
+   80          1      42  0x00             2         0  solid full-tile
+   81          1      43  0x00             2         0  solid full-tile
+   82          3      42  0x00             2        15  solid full-tile; animGroup=15
+   83          3      86  0x08             2        16  solid full-tile; animGroup=16
+   84          3      88  0x08             2        17  solid full-tile; animGroup=17
+   85          1      44  0x00             2         0  solid full-tile
+   86          1      90  0x04             2         0  solid full-tile
+   87          1      91  0x01             2         0  solid full-tile
+   88          1      92  0x03             2         0  solid full-tile
+   89          1      45  0x00             2         0  solid full-tile
+   90          1      93  0x04             2         0  solid full-tile
+   91          1      94  0x01             2         0  solid full-tile
+   92          1      95  0x03             2         0  solid full-tile
+   93          1      46  0x00             1         0  mask inline (16x16 booleans)
+   94          1      96  0x01             3        93  mask alias from tileId=93
+   95          1      47  0x00             1         0  mask inline (16x16 booleans)
+   96          1      97  0x01             3        95  mask alias from tileId=95
+   97          1      48  0x00             1         0  mask inline (16x16 booleans)
+   98          1      98  0x04             3        97  mask alias from tileId=97
+   99          1      49  0x00             1         0  mask inline (16x16 booleans)
+  100          1      99  0x04             3        99  mask alias from tileId=99
+  101          1     100  0x03             3        97  mask alias from tileId=97
+  102          1     101  0x05             3        97  mask alias from tileId=97
+  103          1     102  0x03             3        99  mask alias from tileId=99
+  104          1     103  0x05             3        99  mask alias from tileId=99
+  105          1      50  0x00             0         0  
+  106          1      51  0x00             0         0  
+  107          1      52  0x00             0         0  
+  108          3      40  0x00             2        18  solid full-tile; animGroup=18
+  109          3      88  0x08             2        19  solid full-tile; animGroup=19
+  110          1     104  0x00             2         0  solid full-tile
+  111          1     105  0x00             2         0  solid full-tile
+  112          1     106  0x00             2         0  solid full-tile
+  113          1     107  0x00             1         0  mask inline (16x16 booleans)
+  114          1     108  0x01             3       113  mask alias from tileId=113
+  115          1     109  0x02             3       113  mask alias from tileId=113
+  116          1     110  0x03             3       113  mask alias from tileId=113
+
+inline masks (runtime orientation):
+format: 16x16, '#'=solid, '.'=empty; x left->right, y top->bottom
+
+tileId 3:
+...............#
+..............##
+.............###
+............####
+...........#####
+..........######
+.........#######
+........########
+.......#########
+......##########
+.....###########
+....############
+...#############
+..##############
+.###############
+################
+
+tileId 52:
+#...............
+##..............
+###.............
+####............
+#####.......####
+################
+################
+################
+................
+................
+................
+................
+................
+................
+................
+................
+
+tileId 97:
+.......##.......
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................

@@ -1,0 +1,128 @@
+level=00 theme=1 spawnTiles=(1,8) spawnPx=(24,136) ballType=0 ar=13 D=2 tilemap=48x20 enemies=0
+
+level=01 theme=1 spawnTiles=(29,2) spawnPx=(472,40) ballType=0 ar=2 D=57 tilemap=60x24 enemies=0
+
+level=02 theme=1 spawnTiles=(1,18) spawnPx=(24,296) ballType=0 ar=10 D=87 tilemap=90x24 enemies=0
+
+level=03 theme=1 spawnTiles=(46,2) spawnPx=(744,40) ballType=0 ar=20 D=67 tilemap=105x24 enemies=0
+
+level=04 theme=2 spawnTiles=(2,2) spawnPx=(40,40) ballType=0 ar=2 D=12 tilemap=30x48 enemies=0
+
+level=05 theme=2 spawnTiles=(1,4) spawnPx=(24,72) ballType=0 ar=26 D=16 tilemap=68x45 enemies=3
+  #00 type=1 tiles=(16,32)..(21,32) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(16,32)..(21,32) ag=(0,0) s=(0,1) extentPx=(80,0) raw=011020152000000100
+  #01 type=1 tiles=(37,26)..(43,26) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(37,26)..(43,26) ag=(0,0) s=(0,1) extentPx=(96,0) raw=01251a2b1a00000100
+  #02 type=1 tiles=(37,55)..(43,55) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(37,55)..(43,55) ag=(0,0) s=(0,1) extentPx=(96,0) raw=0125372b3700000100
+
+level=06 theme=2 spawnTiles=(23,37) spawnPx=(376,600) ballType=0 ar=13 D=4 tilemap=45x48 enemies=0
+
+level=07 theme=2 spawnTiles=(2,4) spawnPx=(40,72) ballType=0 ar=23 D=5 tilemap=66x51 enemies=0
+
+level=08 theme=1 spawnTiles=(26,22) spawnPx=(424,360) ballType=0 ar=31 D=21 tilemap=50x60 enemies=2
+  #00 type=1 tiles=(10,48)..(16,48) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(10,48)..(16,48) ag=(0,0) s=(0,1) extentPx=(96,0) raw=010a30103000000100
+  #01 type=1 tiles=(35,22)..(39,22) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(35,22)..(39,22) ag=(0,0) s=(0,1) extentPx=(64,0) raw=012316271600000100
+
+level=09 theme=1 spawnTiles=(3,5) spawnPx=(56,88) ballType=0 ar=21 D=57 tilemap=60x48 enemies=6
+  #00 type=0 tiles=(10,10)..(16,10) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(10,10)..(16,10) ag=(0,0) s=(0,1) extentPx=(96,0) raw=000a0a100a00000100
+  #01 type=1 tiles=(10,16)..(17,16) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(10,16)..(17,16) ag=(0,0) s=(0,1) extentPx=(112,0) raw=010a10111000000100
+  #02 type=0 tiles=(10,32)..(16,32) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(10,32)..(16,32) ag=(0,0) s=(0,1) extentPx=(96,0) raw=000a20102000000100
+  #03 type=0 tiles=(16,21)..(10,21) initOffPx=(0,0) speed=(1,0) norm=True normTiles=(10,21)..(16,21) ag=(0,96) s=(0,-1) extentPx=(96,0) raw=0010150a1500000100
+  #04 type=0 tiles=(38,34)..(38,43) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(38,34)..(38,43) ag=(0,0) s=(1,0) extentPx=(0,144) raw=002622262b00000001
+  #05 type=1 tiles=(39,47)..(46,47) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(39,47)..(46,47) ag=(0,0) s=(0,1) extentPx=(112,0) raw=01272f2e2f00000100
+
+level=10 theme=1 spawnTiles=(10,56) spawnPx=(168,904) ballType=0 ar=3 D=27 tilemap=38x60 enemies=0
+
+level=11 theme=2 spawnTiles=(14,1) spawnPx=(232,24) ballType=0 ar=68 D=32 tilemap=46x72 enemies=7
+  #00 type=2 tiles=(1,1)..(26,1) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(1,1)..(26,1) ag=(0,0) s=(0,1) extentPx=(400,0) raw=0201011a0100000100
+  #01 type=2 tiles=(1,31)..(29,31) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(1,31)..(29,31) ag=(0,0) s=(0,1) extentPx=(448,0) raw=02011f1d1f00000100
+  #02 type=2 tiles=(9,16)..(28,16) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(9,16)..(28,16) ag=(0,0) s=(0,1) extentPx=(304,0) raw=0209101c1000000100
+  #03 type=0 tiles=(11,9)..(11,4) initOffPx=(0,0) speed=(0,1) norm=True normTiles=(11,4)..(11,9) ag=(80,0) s=(-1,0) extentPx=(0,80) raw=000b090b0400000001
+  #04 type=0 tiles=(19,4)..(19,9) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(19,4)..(19,9) ag=(0,0) s=(1,0) extentPx=(0,80) raw=001304130900000001
+  #05 type=2 tiles=(31,16)..(65,16) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(31,16)..(65,16) ag=(0,0) s=(0,1) extentPx=(544,0) raw=021f10411000000100
+  #06 type=2 tiles=(32,1)..(68,1) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(32,1)..(68,1) ag=(0,0) s=(0,1) extentPx=(576,0) raw=022001440100000100
+
+level=12 theme=2 spawnTiles=(16,31) spawnPx=(264,504) ballType=0 ar=86 D=31 tilemap=42x90 enemies=8
+  #00 type=2 tiles=(5,11)..(26,11) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(5,11)..(26,11) ag=(0,0) s=(0,1) extentPx=(336,0) raw=02050b1a0b00000100
+  #01 type=0 tiles=(6,20)..(10,20) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(6,20)..(10,20) ag=(0,0) s=(0,1) extentPx=(64,0) raw=0006140a1400000100
+  #02 type=0 tiles=(10,28)..(6,28) initOffPx=(0,0) speed=(1,0) norm=True normTiles=(6,28)..(10,28) ag=(0,64) s=(0,-1) extentPx=(64,0) raw=000a1c061c00000100
+  #03 type=0 tiles=(13,24)..(17,24) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(13,24)..(17,24) ag=(0,0) s=(0,1) extentPx=(64,0) raw=000d18111800000100
+  #04 type=2 tiles=(25,28)..(33,28) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(25,28)..(33,28) ag=(0,0) s=(0,1) extentPx=(128,0) raw=02191c211c00000100
+  #05 type=2 tiles=(39,20)..(53,20) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(39,20)..(53,20) ag=(0,0) s=(0,1) extentPx=(224,0) raw=022714351400000100
+  #06 type=2 tiles=(59,20)..(71,20) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(59,20)..(71,20) ag=(0,0) s=(0,1) extentPx=(192,0) raw=023b14471400000100
+  #07 type=0 tiles=(80,25)..(80,33) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(80,25)..(80,33) ag=(0,0) s=(1,0) extentPx=(0,128) raw=005019502100000001
+
+level=13 theme=2 spawnTiles=(22,40) spawnPx=(360,648) ballType=0 ar=38 D=26 tilemap=50x84 enemies=1
+  #00 type=0 tiles=(15,17)..(15,31) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(15,17)..(15,31) ag=(0,0) s=(1,0) extentPx=(0,224) raw=000f110f1f00000001
+
+level=14 theme=1 spawnTiles=(2,20) spawnPx=(40,328) ballType=0 ar=42 D=1 tilemap=60x46 enemies=4
+  #00 type=2 tiles=(3,43)..(17,43) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(3,43)..(17,43) ag=(0,0) s=(0,1) extentPx=(224,0) raw=02032b112b00000100
+  #01 type=0 tiles=(6,19)..(6,33) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(6,19)..(6,33) ag=(0,0) s=(1,0) extentPx=(0,224) raw=000613062100000001
+  #02 type=1 tiles=(28,51)..(40,51) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(28,51)..(40,51) ag=(0,0) s=(0,1) extentPx=(192,0) raw=011c33283300000100
+  #03 type=1 tiles=(29,32)..(40,32) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(29,32)..(40,32) ag=(0,0) s=(0,1) extentPx=(176,0) raw=011d20282000000100
+
+level=15 theme=1 spawnTiles=(1,4) spawnPx=(24,72) ballType=0 ar=2 D=40 tilemap=72x50 enemies=2
+  #00 type=0 tiles=(36,19)..(36,27) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(36,19)..(36,27) ag=(0,0) s=(1,0) extentPx=(0,128) raw=002413241b00000001
+  #01 type=1 tiles=(43,1)..(48,1) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(43,1)..(48,1) ag=(0,0) s=(0,1) extentPx=(80,0) raw=012b01300100000100
+
+level=16 theme=1 spawnTiles=(2,68) spawnPx=(40,1096) ballType=0 ar=4 D=1 tilemap=60x70 enemies=7
+  #00 type=2 tiles=(5,49)..(25,49) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(5,49)..(25,49) ag=(0,0) s=(0,1) extentPx=(320,0) raw=020531193100000100
+  #01 type=0 tiles=(12,13)..(12,30) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(12,13)..(12,30) ag=(0,0) s=(1,0) extentPx=(0,272) raw=000c0d0c1e00000001
+  #02 type=2 tiles=(30,1)..(52,1) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(30,1)..(52,1) ag=(0,0) s=(0,1) extentPx=(352,0) raw=021e01340100000100
+  #03 type=0 tiles=(34,32)..(34,47) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(34,32)..(34,47) ag=(0,0) s=(1,0) extentPx=(0,240) raw=002220222f00000001
+  #04 type=0 tiles=(36,20)..(46,20) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(36,20)..(46,20) ag=(0,0) s=(0,1) extentPx=(160,0) raw=0024142e1400000100
+  #05 type=2 tiles=(41,57)..(63,57) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(41,57)..(63,57) ag=(0,0) s=(0,1) extentPx=(352,0) raw=0229393f3900000100
+  #06 type=0 tiles=(67,28)..(67,36) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(67,28)..(67,36) ag=(0,0) s=(1,0) extentPx=(0,128) raw=00431c432400000001
+
+level=17 theme=2 spawnTiles=(2,37) spawnPx=(40,600) ballType=0 ar=38 D=38 tilemap=47x90 enemies=17
+  #00 type=0 tiles=(3,11)..(3,26) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(3,11)..(3,26) ag=(0,0) s=(1,0) extentPx=(0,240) raw=00030b031a00000001
+  #01 type=0 tiles=(10,9)..(10,21) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(10,9)..(10,21) ag=(0,0) s=(1,0) extentPx=(0,192) raw=000a090a1500000001
+  #02 type=0 tiles=(17,20)..(17,30) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(17,20)..(17,30) ag=(0,0) s=(1,0) extentPx=(0,160) raw=001114111e00000001
+  #03 type=0 tiles=(22,25)..(22,15) initOffPx=(0,0) speed=(0,1) norm=True normTiles=(22,15)..(22,25) ag=(160,0) s=(-1,0) extentPx=(0,160) raw=001619160f00000001
+  #04 type=0 tiles=(27,10)..(27,20) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(27,10)..(27,20) ag=(0,0) s=(1,0) extentPx=(0,160) raw=001b0a1b1400000001
+  #05 type=2 tiles=(55,16)..(55,22) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(55,16)..(55,22) ag=(0,0) s=(1,0) extentPx=(0,96) raw=023710371600000001
+  #06 type=0 tiles=(58,22)..(58,16) initOffPx=(0,0) speed=(0,1) norm=True normTiles=(58,16)..(58,22) ag=(96,0) s=(-1,0) extentPx=(0,96) raw=003a163a1000000001
+  #07 type=0 tiles=(64,16)..(64,22) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(64,16)..(64,22) ag=(0,0) s=(1,0) extentPx=(0,96) raw=004010401600000001
+  #08 type=2 tiles=(68,16)..(68,22) initOffPx=(0,48) speed=(0,1) norm=False normTiles=(68,16)..(68,22) ag=(48,0) s=(1,0) extentPx=(0,96) raw=024410441600030001
+  #09 type=1 tiles=(69,28)..(76,28) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(69,28)..(76,28) ag=(0,0) s=(0,1) extentPx=(112,0) raw=01451c4c1c00000100
+  #10 type=0 tiles=(72,22)..(72,16) initOffPx=(0,0) speed=(0,1) norm=True normTiles=(72,16)..(72,22) ag=(96,0) s=(-1,0) extentPx=(0,96) raw=004816481000000001
+  #11 type=1 tiles=(76,18)..(79,18) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(76,18)..(79,18) ag=(0,0) s=(0,1) extentPx=(48,0) raw=014c124f1200000100
+  #12 type=1 tiles=(76,21)..(79,21) initOffPx=(16,0) speed=(1,0) norm=False normTiles=(76,21)..(79,21) ag=(0,16) s=(0,1) extentPx=(48,0) raw=014c154f1501000100
+  #13 type=1 tiles=(82,28)..(88,28) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(82,28)..(88,28) ag=(0,0) s=(0,1) extentPx=(96,0) raw=01521c581c00000100
+  #14 type=0 tiles=(86,5)..(86,13) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(86,5)..(86,13) ag=(0,0) s=(1,0) extentPx=(0,128) raw=005605560d00000001
+  #15 type=0 tiles=(86,15)..(86,25) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(86,15)..(86,25) ag=(0,0) s=(1,0) extentPx=(0,160) raw=00560f561900000001
+  #16 type=1 tiles=(88,32)..(82,32) initOffPx=(0,0) speed=(1,0) norm=True normTiles=(82,32)..(88,32) ag=(0,96) s=(0,-1) extentPx=(96,0) raw=015820522000000100
+
+level=18 theme=2 spawnTiles=(4,64) spawnPx=(72,1032) ballType=0 ar=5 D=37 tilemap=60x70 enemies=5
+  #00 type=0 tiles=(26,1)..(26,13) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(26,1)..(26,13) ag=(0,0) s=(1,0) extentPx=(0,192) raw=001a011a0d00000001
+  #01 type=0 tiles=(26,15)..(26,27) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(26,15)..(26,27) ag=(0,0) s=(1,0) extentPx=(0,192) raw=001a0f1a1b00000001
+  #02 type=1 tiles=(54,16)..(60,16) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(54,16)..(60,16) ag=(0,0) s=(0,1) extentPx=(96,0) raw=0136103c1000000100
+  #03 type=1 tiles=(54,33)..(60,33) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(54,33)..(60,33) ag=(0,0) s=(0,1) extentPx=(96,0) raw=0136213c2100000100
+  #04 type=1 tiles=(54,44)..(60,44) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(54,44)..(60,44) ag=(0,0) s=(0,1) extentPx=(96,0) raw=01362c3c2c00000100
+
+level=19 theme=2 spawnTiles=(4,3) spawnPx=(72,56) ballType=0 ar=13 D=22 tilemap=60x60 enemies=12
+  #00 type=2 tiles=(6,34)..(12,34) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(6,34)..(12,34) ag=(0,0) s=(0,1) extentPx=(96,0) raw=0206220c2200000100
+  #01 type=2 tiles=(6,40)..(12,40) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(6,40)..(12,40) ag=(0,0) s=(0,1) extentPx=(96,0) raw=0206280c2800000100
+  #02 type=2 tiles=(12,31)..(6,31) initOffPx=(0,0) speed=(1,0) norm=True normTiles=(6,31)..(12,31) ag=(0,96) s=(0,-1) extentPx=(96,0) raw=020c1f061f00000100
+  #03 type=2 tiles=(12,37)..(6,37) initOffPx=(0,0) speed=(1,0) norm=True normTiles=(6,37)..(12,37) ag=(0,96) s=(0,-1) extentPx=(96,0) raw=020c25062500000100
+  #04 type=2 tiles=(17,39)..(24,39) initOffPx=(80,0) speed=(1,0) norm=False normTiles=(17,39)..(24,39) ag=(0,80) s=(0,1) extentPx=(112,0) raw=021127182705000100
+  #05 type=2 tiles=(22,19)..(22,27) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(22,19)..(22,27) ag=(0,0) s=(1,0) extentPx=(0,128) raw=021613161b00000001
+  #06 type=2 tiles=(22,37)..(22,29) initOffPx=(0,0) speed=(0,1) norm=True normTiles=(22,29)..(22,37) ag=(128,0) s=(-1,0) extentPx=(0,128) raw=021625161d00000001
+  #07 type=1 tiles=(28,14)..(33,14) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(28,14)..(33,14) ag=(0,0) s=(0,1) extentPx=(80,0) raw=011c0e210e00000100
+  #08 type=1 tiles=(28,18)..(33,18) initOffPx=(80,0) speed=(1,0) norm=False normTiles=(28,18)..(33,18) ag=(0,80) s=(0,1) extentPx=(80,0) raw=011c12211205000100
+  #09 type=1 tiles=(28,22)..(33,22) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(28,22)..(33,22) ag=(0,0) s=(0,1) extentPx=(80,0) raw=011c16211600000100
+  #10 type=1 tiles=(28,26)..(33,26) initOffPx=(80,0) speed=(1,0) norm=False normTiles=(28,26)..(33,26) ag=(0,80) s=(0,1) extentPx=(80,0) raw=011c1a211a05000100
+  #11 type=1 tiles=(36,17)..(40,17) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(36,17)..(40,17) ag=(0,0) s=(0,1) extentPx=(64,0) raw=012411281100000100
+
+level=20 theme=2 spawnTiles=(36,43) spawnPx=(584,696) ballType=0 ar=38 D=38 tilemap=40x48 enemies=10
+  #00 type=0 tiles=(1,6)..(5,9) initOffPx=(0,0) speed=(1,1) norm=False normTiles=(1,6)..(5,9) ag=(0,0) s=(1,1) extentPx=(64,48) raw=000106050900000101
+  #01 type=0 tiles=(9,24)..(9,33) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(9,24)..(9,33) ag=(0,0) s=(1,0) extentPx=(0,144) raw=000918092100000001
+  #02 type=0 tiles=(11,8)..(11,15) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(11,8)..(11,15) ag=(0,0) s=(1,0) extentPx=(0,112) raw=000b080b0f00000001
+  #03 type=2 tiles=(23,1)..(40,1) initOffPx=(32,0) speed=(1,0) norm=False normTiles=(23,1)..(40,1) ag=(0,32) s=(0,1) extentPx=(272,0) raw=021701280102000100
+  #04 type=2 tiles=(26,4)..(26,10) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(26,4)..(26,10) ag=(0,0) s=(1,0) extentPx=(0,96) raw=021a041a0a00000001
+  #05 type=0 tiles=(29,13)..(29,20) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(29,13)..(29,20) ag=(0,0) s=(1,0) extentPx=(0,112) raw=001d0d1d1400000001
+  #06 type=1 tiles=(29,25)..(34,25) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(29,25)..(34,25) ag=(0,0) s=(0,1) extentPx=(80,0) raw=011d19221900000100
+  #07 type=1 tiles=(29,33)..(34,33) initOffPx=(0,0) speed=(1,0) norm=False normTiles=(29,33)..(34,33) ag=(0,0) s=(0,1) extentPx=(80,0) raw=011d21222100000100
+  #08 type=2 tiles=(30,4)..(30,10) initOffPx=(0,80) speed=(0,1) norm=False normTiles=(30,4)..(30,10) ag=(80,0) s=(1,0) extentPx=(0,96) raw=021e041e0a00050001
+  #09 type=2 tiles=(35,4)..(35,10) initOffPx=(0,0) speed=(0,1) norm=False normTiles=(35,4)..(35,10) ag=(0,0) s=(1,0) extentPx=(0,96) raw=022304230a00000001
+
+level=21 theme=1 spawnTiles=(8,2) spawnPx=(136,40) ballType=0 ar=8 D=58 tilemap=60x13 enemies=0
+

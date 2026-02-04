@@ -29,3 +29,13 @@ _ul
 
 # Reverse engineering sources (local only)
 original_code/
+
+# Build outputs (local)
+release/
+EBOOT.PBP
+PARAM.SFO
+*.o
+*.elf
+
+# Keep original resources in one place (local only)
+src/res/
