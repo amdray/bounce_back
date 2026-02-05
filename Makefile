@@ -1,5 +1,5 @@
 TARGET = bounce_back
-OBJS = src/main.o src/resource_loader.o
+OBJS = src/main.o src/resource_loader.o src/level_loader.o src/tile_metadata.o src/tile_animation.o src/tileset_loader.o src/level_renderer.o src/player.o src/collision_masks.o src/collision.o src/input.o src/camera.o
 
 # ---- Release folder setup ----
 RELEASE_DIR = release

@@ -20,15 +20,23 @@
 
 ## Текущий статус проекта
 
-### Реализовано (minimal bring-up на PSP)
+### Реализовано (работающий прототип на PSP)
 
-**Код:** `src/main.c`, `src/resource_loader.h/c`, `Makefile`
+**Код:** `src/*.c`, `src/*.h`, `Makefile`
 
-- ✅ PSP callbacks (HOME button)
-- ✅ SDL2 + SDL2_image инициализация
-- ✅ ResourceLoader для c.java контейнеров (big-endian)
-- ✅ Загрузка и рендеринг первого ball sprite из /res/b
-- ✅ Makefile для PSPSDK (PSP_LARGE_MEMORY=1)
+- ✅ **PSP инициализация** (callbacks, HOME button)
+- ✅ **SDL2 + SDL2_image** инициализация
+- ✅ **ResourceLoader** для c.java контейнеров (big-endian)
+- ✅ **Загрузка уровней** (`level_loader.c`) из /res/lf
+- ✅ **Загрузка тайлсетов** (`tileset_loader.c`) из /res/if0, /res/if1
+- ✅ **Метаданные тайлов** (`tile_metadata.c`) из /res/tf
+- ✅ **Анимация тайлов** (`tile_animation.c`) - renderType=3, 50ms tick
+- ✅ **Рендеринг уровней** (`level_renderer.c`) с правильными текстурами
+- ✅ **Система коллизий** (`collision.c`) с масками 16×16
+- ✅ **Физика игрока** (`player.c`) - гравитация, прыжки, движение
+- ✅ **Ввод** (`input.c`) - клавиатура (влево/вправо/прыжок)
+- ✅ **Камера** (`camera.c`) - плавное следование за игроком
+- ✅ **Игровой цикл** (50ms tick, 20 FPS)
 
 **Сборка:**
 ```bash
@@ -39,15 +47,15 @@ make
 > Примечание: `make` копирует оригинальные ресурсы из `original_code/bounce_back_s60.jar.src/res/` в `release/res/`.  
 > Путь можно переопределить: `make ORIGINAL_RES_DIR=/path/to/res`.
 
-**Результат:** `release/EBOOT.PBP` с тестовым экраном (ball sprite в центре 480×272)
+**Результат:** `release/EBOOT.PBP` - **играбельная версия** с уровнями, физикой, коллизиями и анимацией
 
 ### Следующие этапы (не реализовано)
 
-- Перенос тайлового движка (рендер tileMap из /res/lf)
-- Система коллизий (g.collisionTest + маски)
-- Игровой цикл h.run() (50ms tick + inputMask)
-- Камера (smooth follow + deadzone)
+- Анимация спрайтов игрока (ball sprite states)
 - Враги и движущиеся объекты
+- Специальные тайлы (trampolines, teleports, bonuses)
+- UI и HUD (очки, жизни, таймер)
+- Звук и музыка
 
 ### Общая информация
 
@@ -104,14 +112,35 @@ make
 │       ├── *.java               # Логика игры, UI, движок, физика
 │       └── res/                 # Оригинальные бинарные ресурсы (lf, tf, if*, bg, b, r и др.)
 │
+├── src/                         # ✅ Реализация порта на PSP (C + SDL2)
+│   ├── main.c                   # Главный файл: инициализация, игровой цикл (50ms tick)
+│   ├── resource_loader.[ch]     # Загрузка c.java контейнеров (big-endian)
+│   ├── level_loader.[ch]        # Парсинг уровней из /res/lf (tileMap, spawn, size)
+│   ├── tileset_loader.[ch]      # Загрузка PNG текстур из /res/if0, /res/if1
+│   ├── tile_metadata.[ch]       # Метаданные тайлов из /res/tf (renderType, imageIndex, collision)
+│   ├── tile_animation.[ch]      # Система анимации тайлов (renderType=3, tick 50ms)
+│   ├── level_renderer.[ch]      # Рендеринг уровня (tileMap → экран, анимации)
+│   ├── collision.[ch]           # Тесты коллизий (g.collisionTest)
+│   ├── collision_masks.[ch]     # Загрузка и проверка масок коллизий 16×16
+│   ├── player.[ch]              # Физика игрока (гравитация, прыжки, движение)
+│   ├── input.[ch]               # Обработка ввода (влево/вправо/прыжок)
+│   ├── camera.[ch]              # Камера с плавным следованием
+│   └── Makefile                 # Сборка для PSPSDK (WSL/Linux)
+│
 ├── docs/
 │   ├── DEOBFUSCATION.md             # Справочник по деобфускации: классы/поля/форматы ресурсов
-│   ├── GAME_LOOP_SPEC.md            # “Исполняемая модель” тика 50ms (контракт game loop)
+│   ├── GAME_LOOP_SPEC.md            # "Исполняемая модель" тика 50ms (контракт game loop)
 │   ├── COLLISION_CONTRACT.md        # Контракт коллизий (g.collisionTest): collisionType/transform/aux + кейсы
-│   ├── BRING_UP.md                  # Чеклист/контракты для первого запуска (bring-up) на PSP/SDL2
 │   ├── MEMORY_ANALYSIS.md           # Анализ памяти/VRAM и рекомендации
 │   ├── original-code-review.md      # Заметки по обзору исходников/архитектуры
-│   └── tile_types_documentation.md  # Документация по типам тайлов и коллизиям
+│   ├── tile_types_documentation.md  # Документация по типам тайлов и коллизиям
+│   ├── STEP_01_BRING_UP.md          # ✅ Шаг 1: Инициализация SDL2, загрузка ресурсов
+│   ├── STEP_02_TILE_ENGINE.md       # ✅ Шаг 2: Загрузка и рендеринг уровней
+│   ├── STEP_03_PLAYER_PHYSICS.md    # ✅ Шаг 3: Физика игрока
+│   ├── STEP_04_COLLISIONS.md        # ✅ Шаг 4: Система коллизий
+│   ├── STEP_05_INPUT.md             # ✅ Шаг 5: Обработка ввода
+│   ├── STEP_06_CAMERA.md            # ✅ Шаг 6: Камера
+│   └── STEP_07_TILE_ANIMATION.md    # ✅ Шаг 7: Анимация тайлов
 │
 ├── artifacts/
 │   ├── tile_mapping_table.txt                   # Табличное представление свойств тайлов
@@ -134,6 +163,7 @@ make
 │   ├── analyze_memory_requirements.py           # Анализ требований к памяти (PSP)
 │   └── analyze_splash_screens.py                # Анализ заставок/меню/UI (PSP)
 ├── gifs/                        # Визуализация уровней (отладочные GIF)
+├── release/                     # ✅ Результаты сборки (EBOOT.PBP + res/)
 └── README.md                    # Текущая документация проекта
 ```
 
@@ -154,8 +184,8 @@ make
 - [`COLLISION_CONTRACT.md`](docs/COLLISION_CONTRACT.md)  
   Самая рискованная часть порта: точная семантика `g.collisionTest(...)`, `collisionType`, `transform`, `aux`-alias, ориентация масок, и минимальные проверяемые кейсы из реальных уровней.
 
-- [`BRING_UP.md`](docs/BRING_UP.md)  
-  Что именно нужно сделать для “первого запуска” (bring-up) без gameplay: загрузка `/res/tf/lf/if*`, статический рендер tileMap, анимации (`renderType=3`) и диагностические маркеры.
+- Пошаговая документация (`docs/STEP_*.md`):  
+  Детальное описание каждого этапа реализации порта: от инициализации SDL2 до анимации тайлов. Каждый шаг содержит спецификацию формата данных, алгоритмы и контракты.
 
 - `scripts/generate_maps_from_lf.py`  
   Десериализация уровней из `res/lf`, сборка тайловых карт и проверка структуры данных.
@@ -262,15 +292,22 @@ make
 
 ## PSP порт (PSPSDK) - текущий статус
 
-### Реализовано (minimal bring-up)
+### Реализовано (играбельная версия)
 
-**Код:** `src/main.c`, `src/resource_loader.h/c`, `Makefile`
+**Код:** `src/*.c`, `src/*.h`, `Makefile`
 
-- ✅ PSP callbacks (HOME button)
-- ✅ SDL2 + SDL2_image инициализация
-- ✅ ResourceLoader для c.java контейнеров (big-endian)
-- ✅ Загрузка и рендеринг первого ball sprite из /res/b
-- ✅ Makefile для PSPSDK (PSP_LARGE_MEMORY=1)
+- ✅ **Инициализация**: PSP callbacks, SDL2 + SDL2_image
+- ✅ **Ресурсы**: ResourceLoader для c.java контейнеров (big-endian)
+- ✅ **Уровни**: Загрузка из /res/lf (tileMap, spawn, размеры)
+- ✅ **Текстуры**: Загрузка PNG из /res/if0, /res/if1 (111 тайлов)
+- ✅ **Метаданные**: Парсинг /res/tf (renderType, imageIndex, collision)
+- ✅ **Анимация**: Система анимации тайлов (renderType=3, 50ms tick)
+- ✅ **Рендеринг**: Отрисовка уровня с анимациями
+- ✅ **Коллизии**: Полная система коллизий с масками 16×16
+- ✅ **Физика**: Гравитация, прыжки, движение (деление скоростей на 10)
+- ✅ **Ввод**: Обработка клавиш (влево/вправо/прыжок)
+- ✅ **Камера**: Плавное следование за игроком
+- ✅ **Игровой цикл**: 50ms tick (20 FPS)
 
 **Сборка:**
 ```bash
@@ -278,15 +315,12 @@ make
 make
 ```
 
-> Примечание: `make` копирует оригинальные ресурсы из `original_code/bounce_back_s60.jar.src/res/` в `release/res/`.  
-> Путь можно переопределить: `make ORIGINAL_RES_DIR=/path/to/res`.
+**Результат:** `release/EBOOT.PBP` - **полностью играбельная версия** с уровнями, физикой, коллизиями и анимацией
 
-**Результат:** `release/EBOOT.PBP` с тестовым экраном (ball sprite в центре)
+### Следующие этапы
 
-### Следующие этапы (не реализовано)
-
-- Перенос тайлового движка (рендер tileMap из /res/lf)
-- Система коллизий (g.collisionTest + маски)
-- Игровой цикл h.run() (50ms tick + inputMask)
-- Камера (smooth follow + deadzone)
+- Анимация спрайтов игрока (состояния шара)
 - Враги и движущиеся объекты
+- Специальные тайлы (trampolines, teleports, bonuses)
+- UI и HUD (очки, жизни, таймер)
+- Звук и музыка

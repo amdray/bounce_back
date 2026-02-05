@@ -3,11 +3,19 @@
 Generate complete tile ID to image index mapping from tf file.
 """
 
-from parse_tf import parse_tf_file
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Import from parse_tf_textures&animations.py
+import importlib.util
+spec = importlib.util.spec_from_file_location("parse_tf", os.path.join(os.path.dirname(__file__), "parse_tf_textures&animations.py"))
+parse_tf = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parse_tf)
 
 if __name__ == '__main__':
-    tf_path = r'd:\OneDrive\bounce_back\original_code\bounce_back_s60.jar.src\res\tf'
-    tile_data = parse_tf_file(tf_path)
+    tf_path = r'D:\OneDrive\VS Code Project\psp\bounce_back\original_code\bounce_back_s60.jar.src\res\tf'
+    tile_data = parse_tf.parse_tf_file(tf_path)
 
     print('\n' + '='*60)
     print('Complete Tile to Image Mapping')

@@ -88,6 +88,10 @@ def parse_tf_file(filepath):
     print(f'{"ID":<4} {"Type":<6} {"Image":<6} {"Flags":<6} {"Coll":<6}')
     print('-' * 40)
 
+    # Normalize tile size (g.java normalizes 12 -> 16 internally, but file has 12)
+    mask_w = 16 if tile_w == 12 else tile_w
+    mask_h = 16 if tile_h == 12 else tile_h
+    
     tile_data = {}
     for tile_id in range(num_tiles):
         if tile_id == split_point:
@@ -104,9 +108,10 @@ def parse_tf_file(filepath):
 
         # For collision type 1, there's additional data
         if collision == 1:
-            # Read boolean array for pixel-perfect collision (16x16 for 12x12 upscaled)
-            for y in range(16):  # Always 16x16 after upscaling from 12x12
-                for x in range(16):
+            # Read boolean array: s[b4] = new boolean[f][A] (g.java:225)
+            # Loop order: for (b6 = 0; b6 < A; b6++) for (b7 = 0; b7 < f; b7++)
+            for y in range(mask_h):  # A (height) - outer loop
+                for x in range(mask_w):  # f (width) - inner loop
                     if offset < len(data):
                         offset += 1  # skip boolean
 
