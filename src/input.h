@@ -14,6 +14,8 @@ typedef struct {
     bool right;
     bool down;
     bool jump;
+    bool shoulder_l;
+    bool shoulder_r;
 } Input;
 
 void input_init(void);

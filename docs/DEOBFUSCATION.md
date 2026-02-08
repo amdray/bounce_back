@@ -508,15 +508,20 @@ void camera_reset(Camera* cam);  // Вызывать при загрузке у�
 
 **Metadata chunk: заголовок:**
 ```java
-byte theme_id;        // b1 - индекс темы (0, 1, 2)
-byte spawn_y;         // b2 - Y координата спавна в тайлах
-byte spawn_x;         // b3 - X координата спавна в тайлах  
-byte ball_type;       // b4 - 0=маленький, другое=большой
-byte ar;              // ar - дополнительный параметр
-byte D;               // D - дополнительный параметр
-byte enemy_count;     // j - количество врагов
-// Далее: enemy_count записей по 9 байт (moving objects / enemies)
-```
+	byte theme_id;        // b1 - индекс темы (0, 1, 2)
+	byte spawn_y;         // b2 - Y координата спавна в тайлах
+	byte spawn_x;         // b3 - X координата спавна в тайлах  
+	byte ball_type;       // b4 - 0=маленький, другое=большой
+	byte exit_y_tiles;    // this.ar - Y тайла выхода (h.java:199, h.java:640)
+	byte exit_x_tiles;    // this.D  - X тайла выхода (h.java:200, h.java:641)
+	byte enemy_count;     // j - количество врагов
+	// Далее: enemy_count записей по 9 байт (moving objects / enemies)
+	```
+
+**Подтверждение смысла `exit_x/exit_y` по коду:**
+- `h.b(levelIndex)` читает `this.ar` и `this.D` из meta-chunk сразу после `ball_type` (h.java:195-201).
+- В `h.c(Graphics)` эти значения используются как координаты тайла выхода: `n=this.ar`, `i1=this.D`; затем один раз вычисляются пиксельные координаты двери `P=i1*16`, `R=n*16` (h.java:640-646).
+- Условие завершения уровня в `a.d()` проверяет попадание игрока в прямоугольник `32×48` относительно `E.P/E.R` при `E.o==true` (a.java:607-612), то есть `E.P/E.R` — именно позиция двери в пикселях, а `this.ar/this.D` — её позиция в тайлах.
 
 ### Спавн игрока (пиксели)
 
@@ -557,6 +562,38 @@ byte enemy_count;     // j - количество врагов
 - затем `height * width` байт тайлов (в строковом порядке), где:
   - `tileId = tileByte & 0x7F`
   - `tileByte & 0x80` — флаг заливки `bgColor` перед рисованием тайла (и используется в коллизиях как часть “тайла”)
+
+---
+
+## Формат `/res/b` (Ball) — маски игрока + спрайты (FACT)
+
+Источник: конструктор `a(...)` (Player) читает `/res/b` через `c("/res/b")` (a.java:83).
+
+`/res/b` — контейнер `c.java`. Порядок чтения элементов:
+
+1) **chunk[0] = player masks (binary, НЕ PNG)**
+
+Формат chunk[0] (a.java:89-99):
+- `u8 maskCount` (a.java:89-90)
+- для каждой маски `i`:
+  - `u8 w`, `u8 h` (a.java:92-94)
+  - `boolean[w][h]` заполнение `readBoolean()` (1 байт) (a.java:95-98)
+
+Ориентация маски:
+- используется как `mask[x][y]` при вызове tile-engine collision (см. `g.java:395`).
+
+2) **chunk[1..25] = 25 PNG спрайтов мяча**
+
+Оригинал читает 25 изображений подряд через `c.a()` (a.java:104-108) и кладёт в `a.w[0..24]`.
+
+### Выбор маски по spriteIndex (FACT)
+
+Перед коллизиями игрок выбирает индекс маски так (a.java:243-249):
+- `spriteIndex ∈ [0..8]` или `[20..22]` → mask `0`
+- `spriteIndex ∈ [9..19]` → mask `1`
+
+Размер collision-rect берётся из выбранной маски:
+- `w = mask.length`, `h = mask[0].length`, `rect = (x - w/2, y - h/2, w, h)` (a.java:250-255).
 
 ---
 
@@ -629,6 +666,8 @@ byte enemy_count;     // j - количество врагов
 |---|---:|---|---|
 | `animCount (U)` | `u8` | Кол-во групп анимации | `20` |
 
+Сразу после 14-байтового заголовка объекта 0 идёт `animCount` (1 байт); отдельного “global reserved byte” между заголовком и `animCount` нет.
+
 **Для каждой группы (0..animCount-1):**
 
 | Поле | Тип | Смысл | Значение в этой версии |
@@ -649,7 +688,7 @@ byte enemy_count;     // j - количество врагов
 | `imageIndex (T[tile])` | `u8` | Индекс изображения в `V[]` (tile atlas/images) |
 | `transform (b[tile])` | `u8` | Rotate/flip (используется в draw и в `collisionType=3`) |
 | `collisionType (l[tile])` | `u8` | `0`=нет, `1`=mask без трансформаций, `2`=solid, `3`=mask с трансформациями + алиас маски |
-| `mask` | `bool[tileH][tileW]` | Присутствует только при `collisionType=1` (256 байт при 16×16) |
+| `mask` | `bool[tileH][tileW]` | Присутствует только при `collisionType=1` (256 байт при 16×16); индексация как `mask[y][x]` |
 | `aux (af[tile])` | `u32` | Перегруженное поле: при `renderType=3` это `animGroup`; при `collisionType=3` это `maskBaseTileId` для алиаса `s[tile]=s[aux]` |
 
 ### Семантика байта карты `tileMap`
@@ -726,5 +765,5 @@ byte enemy_count;     // j - количество врагов
 - [ ] `/res/tf` — точный формат и таблицы: `tileType (v)`, `collisionType (l)`, `transform (b)`, анимации (`U/O/m`)
 - [ ] Класс `i.java` (MenuCanvas) - полный маппинг режимов `uiMode (V)` и сценариев экранов `screenId (g)`
 - [ ] Класс `e.java` - назначение и связи с UI/score/RMS
-- [ ] `/res/lf`: подтвердить смысл `ar`/`D` и проверить, встречаются ли `enemyType` кроме `0..2` (в коде поведение описано только для них)
+- [ ] `/res/lf`: проверить, встречаются ли `enemyType` кроме `0..2` (в коде поведение описано только для них)
 - [ ] Формат collision masks в `/res/tf`

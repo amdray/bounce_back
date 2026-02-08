@@ -61,6 +61,8 @@ def parse_tf_file(filepath):
     print(f'Total images (b1): {b1}')
     print(f'Images from if0 (b2): {b2}')
     print(f'Images from if1: {b1 - b2}')
+    print(f'WRAP HORIZONTAL: {wrap_h} -> this.d={wrap_h != 0} -> {"CLAMP (no wrap)" if wrap_h != 0 else "WRAP (infinite loop)"}')
+    print(f'WRAP VERTICAL: {wrap_v} -> this.X={wrap_v != 0} -> {"CLAMP (no wrap)" if wrap_v != 0 else "WRAP (infinite loop)"}')
     print(f'Tile size: {tile_w}x{tile_h}')
     print(f'Number of tiles (h): {num_tiles}')
     print(f'Split point: {split_point}')

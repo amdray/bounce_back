@@ -11,8 +11,8 @@
 #include <SDL2/SDL.h>
 
 typedef struct {
-    SDL_Texture** textures; // array of SDL_Texture*
-    int count;              // number of textures
+    SDL_Texture** textures; // [image_index]
+    int count;              // number of base images
 } Tileset;
 
 Tileset* tileset_load(SDL_Renderer* renderer, const char* if0_path, const char* theme_path);

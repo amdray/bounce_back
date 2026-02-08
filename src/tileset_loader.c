@@ -4,6 +4,7 @@
 
 #include "tileset_loader.h"
 #include "resource_loader.h"
+
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,9 +18,9 @@ static SDL_Texture* load_png_texture_from_mem(SDL_Renderer* renderer, const uint
     SDL_Surface* surface = IMG_LoadTyped_RW(rw, 1, "PNG");
     if (!surface) return NULL;
 
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
-    return tex;
+    return texture;
 }
 
 Tileset* tileset_load(SDL_Renderer* renderer, const char* if0_path, const char* theme_path) {
@@ -59,18 +60,15 @@ Tileset* tileset_load(SDL_Renderer* renderer, const char* if0_path, const char* 
     for (int i = 0; i < base_count; i++) {
         size_t size = 0;
         const uint8_t* data = resource_get_element(base, i, &size);
-        SDL_Texture* tex = load_png_texture_from_mem(renderer, data, size);
-        tileset->textures[i] = tex;
+        tileset->textures[i] = load_png_texture_from_mem(renderer, data, size);
     }
     resource_free(base);
 
-    // Optional theme append: add /res/if{theme} after /res/if0
     if (theme) {
         for (int i = 0; i < theme_count; i++) {
             size_t size = 0;
             const uint8_t* data = resource_get_element(theme, i, &size);
-            SDL_Texture* tex = load_png_texture_from_mem(renderer, data, size);
-            tileset->textures[base_count + i] = tex;
+            tileset->textures[base_count + i] = load_png_texture_from_mem(renderer, data, size);
         }
         resource_free(theme);
     }
@@ -94,3 +92,4 @@ SDL_Texture* tileset_get(const Tileset* tileset, int image_index) {
     if (image_index < 0 || image_index >= tileset->count) return NULL;
     return tileset->textures[image_index];
 }
+

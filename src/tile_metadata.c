@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+static uint8_t g_tile_flag_mask = 0;
+static uint32_t g_bg_color_rgb = 0;
+
 static int require_bytes(const char* ctx, const uint8_t* p, const uint8_t* end, size_t need) {
     size_t have = (size_t)(end - p);
     if (have < need) {
@@ -19,6 +22,10 @@ static int require_bytes(const char* ctx, const uint8_t* p, const uint8_t* end, 
 
 static uint32_t read_be32(const uint8_t* p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+
+static int32_t read_be32_i32(const uint8_t* p) {
+    return (int32_t)read_be32(p);
 }
 
 TileMetadata* tilemetadata_load(const char* tf_path) {
@@ -64,13 +71,14 @@ TileMetadata* tilemetadata_load(const char* tf_path) {
     uint8_t splitIndex = p0[7];
     uint8_t tileIdMask = p0[8];
     uint8_t tileFlagMask = p0[9];
+    uint32_t bgColor = read_be32(p0 + 10);
     (void)images_total;
     (void)images_base;
     (void)clampX;
     (void)clampY;
     (void)tileIdMask;
-    (void)tileFlagMask;
-    (void)read_be32(p0 + 10); // bgColor (unused on Step 2)
+    g_tile_flag_mask = tileFlagMask;
+    g_bg_color_rgb = bgColor & 0x00FFFFFFu;
     p0 += 14;
 
     // Normalize tile size (g.java normalizes 12 -> 16)
@@ -143,14 +151,14 @@ TileMetadata* tilemetadata_load(const char* tf_path) {
             resource_free(tf);
             return NULL;
         }
-        uint32_t aux_u32 = read_be32(*p);
+        int32_t aux_i32 = read_be32_i32(*p);
         *p += 4;
 
         meta[tileId].render_type = renderType;
         meta[tileId].image_index = imageIndex;
         meta[tileId].transform = transform;
         meta[tileId].collision_type = collisionType;
-        meta[tileId].aux = (uint8_t)(aux_u32 & 0xFF);
+        meta[tileId].aux = aux_i32;
     }
 
     resource_free(tf);
@@ -159,4 +167,12 @@ TileMetadata* tilemetadata_load(const char* tf_path) {
 
 void tilemetadata_free(TileMetadata* meta) {
     free(meta);
+}
+
+uint8_t tilemetadata_flag_mask(void) {
+    return g_tile_flag_mask;
+}
+
+uint32_t tilemetadata_bg_color_rgb(void) {
+    return g_bg_color_rgb;
 }

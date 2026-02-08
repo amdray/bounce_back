@@ -33,7 +33,7 @@
 ```c
 // collision_masks.h
 typedef struct {
-    bool*** masks;      // [tileId][x][y] - аналог g.s (g.java:207)
+    bool*** masks;      // [tileId][y][x] - аналог g.s (g.java:207). ВАЖНО: индекс = mask[y][x] (см. g.java)
     uint8_t tile_count;
     uint8_t mask_w;     // 16 после нормализации (g.java:167)
     uint8_t mask_h;
@@ -65,6 +65,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta,
 ```
 
 Формат чтения см. DEOBFUSCATION.md § "Формат метаданных тайлов (res/tf)".
+Примечание по `/res/tf`: сразу после 14-байтового заголовка идёт `u8 animCount (U)`; отдельного “reserved/global byte” между header и `animCount` нет (см. `g.java`).
 
 ### Проверка коллизии (g.java:315-430)
 
@@ -80,7 +81,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta,
 4. Для каждого пикселя:
    - Локальные координаты в тайле (g.java:379-382)
    - Если type==3: apply_transform (g.java:395-419)
-   - Проверить маску `s[tileId][x][y]` (g.java:422)
+   - Проверить маску `s[tileId][y][x]` (g.java:422)
    - Проверить player_mask если есть (g.java:424)
 
 **Подпись:**

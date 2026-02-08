@@ -69,12 +69,12 @@ CollisionMasks* collision_masks_load(const char* tf_path) {
     uint8_t maskH = (tileH == 12) ? 16 : tileH;
 
     // Skip animation table (g.java:172-180)
-    if (!require_bytes("collision_masks_load(anim hdr)", p0, end0, 2)) {
+    if (!require_bytes("collision_masks_load(anim hdr)", p0, end0, 1)) {
         resource_free(tf);
         return NULL;
     }
     uint8_t animCount = p0[0];
-    p0 += 2;
+    p0 += 1;
     for (uint8_t i = 0; i < animCount; i++) {
         if (!require_bytes("collision_masks_load(anim entry)", p0, end0, 3)) {
             resource_free(tf);
@@ -117,16 +117,16 @@ CollisionMasks* collision_masks_load(const char* tf_path) {
         *p += 5;
 
         if (collisionType == 1) {
-            bool** tile_mask = (bool**)malloc(maskW * sizeof(bool*));
+            bool** tile_mask = (bool**)malloc(maskH * sizeof(bool*));
             if (!tile_mask) {
                 collision_masks_free(masks);
                 resource_free(tf);
                 return NULL;
             }
-            for (int x = 0; x < maskW; x++) {
-                tile_mask[x] = (bool*)malloc(maskH * sizeof(bool));
-                if (!tile_mask[x]) {
-                    for (int j = 0; j < x; j++) free(tile_mask[j]);
+            for (int y = 0; y < maskH; y++) {
+                tile_mask[y] = (bool*)malloc(maskW * sizeof(bool));
+                if (!tile_mask[y]) {
+                    for (int j = 0; j < y; j++) free(tile_mask[j]);
                     free(tile_mask);
                     collision_masks_free(masks);
                     resource_free(tf);
@@ -144,7 +144,7 @@ CollisionMasks* collision_masks_load(const char* tf_path) {
 
             for (int y = 0; y < maskH; y++) {
                 for (int x = 0; x < maskW; x++) {
-                    tile_mask[x][y] = ((*p)[0] != 0);
+                    tile_mask[y][x] = ((*p)[0] != 0);
                     (*p)++;
                 }
             }
@@ -189,8 +189,8 @@ void collision_masks_free(CollisionMasks* masks) {
 
             if (seen) seen[seen_count++] = tile_mask;
 
-            for (int x = 0; x < masks->mask_w; x++) {
-                free(tile_mask[x]);
+            for (int y = 0; y < masks->mask_h; y++) {
+                free(tile_mask[y]);
             }
             free(tile_mask);
         }
@@ -200,4 +200,3 @@ void collision_masks_free(CollisionMasks* masks) {
     }
     free(masks);
 }
-

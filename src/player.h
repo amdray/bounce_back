@@ -14,6 +14,7 @@
 #include "collision_masks.h"
 #include "input.h"
 #include "level_loader.h"
+#include "player_masks.h"
 #include "tile_metadata.h"
 
 // Jumps (a.java:543-568)
@@ -58,10 +59,36 @@ typedef struct {
     bool has_speed_bonus; // this.j
     bool has_jump_bonus;  // this.C
     bool has_grav_bonus;  // this.l
+    bool stunned;         // this.q (reduced in port)
+    int control_mask;     // this.m
+    int bounce_state;     // this.G
+    int timer_a;          // this.A
+    int timer_b;          // this.B
+    int timer_c;          // this.b
+    int state_r;          // this.r
+    int state_a;          // this.a
+    int carrier_object_index; // this.k (active moving object index)
+
+    // Death/respawn
+    bool is_dying;            // this.e
+    int spawn_tile_x;         // this.H - spawn checkpoint X
+    int spawn_tile_y;         // this.n - spawn checkpoint Y
+    bool spawn_is_large;      // original is_large at spawn
+    bool god_mode;            // Cheat: invincibility (R+L)
+    int lives;                // CrystalMidlet.h analog for HUD
+    int score;                // Score counter for HUD
 
     // Resources
     SDL_Texture** ball_sprites;
     int sprite_count;
+
+    // Player masks (/res/b chunk[0]) - Step 10
+    PlayerMasks* masks;
+    int mask_w;
+    int mask_h;
+    int mask_half_w;
+    int mask_half_h;
+    const bool* active_mask;
 } Player;
 
 Player* player_create(SDL_Renderer* renderer, int spawn_x_tiles, int spawn_y_tiles, bool is_large_ball);

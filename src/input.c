@@ -27,6 +27,8 @@ void input_update(Input* input) {
     input->left = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT) != 0;
     input->right = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) != 0;
     input->down = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN) != 0;
-    input->jump = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_A) != 0; // Cross button
+    input->jump = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_A) != 0;
+    input->shoulder_l = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
+    input->shoulder_r = SDL_GameControllerGetButton(s_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0;
 }
 

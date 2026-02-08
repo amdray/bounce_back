@@ -26,13 +26,23 @@ void renderer_free(LevelRenderer* renderer) {
     free(renderer);
 }
 
-void renderer_draw(LevelRenderer* lr, SDL_Renderer* r, int camera_x, int camera_y) {
+void renderer_draw(LevelRenderer* lr,
+                   SDL_Renderer* r,
+                   Player* player,
+                   const ForegroundPass* fg,
+                   int camera_x,
+                   int camera_y) {
     if (!lr || !lr->level || !lr->tile_meta || !lr->tileset || !r) return;
 
     int startTileX = camera_x / TILE_SIZE;
     int endTileX = (camera_x + SCREEN_WIDTH - 1) / TILE_SIZE;
     int startTileY = camera_y / TILE_SIZE;
     int endTileY = (camera_y + SCREEN_HEIGHT - 1) / TILE_SIZE;
+    const uint8_t flag_mask = tilemetadata_flag_mask();
+    const uint32_t bg = tilemetadata_bg_color_rgb();
+    const uint8_t bg_r = (uint8_t)((bg >> 16) & 0xFF);
+    const uint8_t bg_g = (uint8_t)((bg >> 8) & 0xFF);
+    const uint8_t bg_b = (uint8_t)(bg & 0xFF);
 
     for (int y = startTileY; y <= endTileY; y++) {
         for (int x = startTileX; x <= endTileX; x++) {
@@ -44,19 +54,29 @@ void renderer_draw(LevelRenderer* lr, SDL_Renderer* r, int camera_x, int camera_
 
             uint8_t tile_byte = level_get_tile(lr->level, x, y);
             uint8_t tile_id = (uint8_t)(tile_byte & 0x7F);
-            bool bg_fill = (tile_byte & 0x80) != 0;
-            (void)bg_fill;
-
             uint8_t display_tile = animation_get_tile(lr->tile_anim, lr->tile_meta, tile_id);
             TileMetadata meta = lr->tile_meta[display_tile];
+            SDL_Rect dest = { screen_x, screen_y, TILE_SIZE, TILE_SIZE };
+
+            if ((tile_byte & flag_mask) != 0) {
+                SDL_SetRenderDrawColor(r, bg_r, bg_g, bg_b, 255);
+                SDL_RenderFillRect(r, &dest);
+            }
+
             if (meta.render_type == 0) continue;
             if (meta.render_type == 3) continue;
 
             SDL_Texture* tex = tileset_get(lr->tileset, meta.image_index);
             if (!tex) continue;
-
-            SDL_Rect dest = { screen_x, screen_y, TILE_SIZE, TILE_SIZE };
             SDL_RenderCopy(r, tex, NULL, &dest);
         }
+    }
+
+    if (player) {
+        player_render(player, r, camera_x, camera_y);
+    }
+
+    if (fg) {
+        foreground_pass_draw(r, lr->level, lr->tile_meta, lr->tile_anim, lr->tileset, fg, camera_x, camera_y);
     }
 }

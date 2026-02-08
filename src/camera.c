@@ -4,13 +4,17 @@
 
 #include "camera.h"
 
+// Gameplay viewport excludes HUD strip at bottom.
+#define HUD_HEIGHT 21
+#define CAMERA_VIEW_HEIGHT (SCREEN_HEIGHT - HUD_HEIGHT)
+
 static inline bool is_level_small(int level_height) {
-    return (level_height * TILE_SIZE) < SCREEN_HEIGHT;
+    return (level_height * TILE_SIZE) < CAMERA_VIEW_HEIGHT;
 }
 
 static inline int get_center_offset_y(int level_height) {
     int levelPixelHeight = level_height * TILE_SIZE;
-    return -(SCREEN_HEIGHT - levelPixelHeight) / 2;
+    return -(CAMERA_VIEW_HEIGHT - levelPixelHeight) / 2;
 }
 
 void camera_init(Camera* cam) {
@@ -55,12 +59,12 @@ void camera_update(Camera* cam, int player_x, int player_y, int level_width, int
     }
 
     if (!cam->initialized) {
-        cam->y = player_y - SCREEN_HEIGHT / 2;
+        cam->y = player_y - CAMERA_VIEW_HEIGHT / 2;
         cam->initialized = true;
     }
 
-    int deadZoneTop = (SCREEN_HEIGHT * CAMERA_DEADZONE_PERCENT) / 100;
-    int deadZoneBottom = SCREEN_HEIGHT - deadZoneTop;
+    int deadZoneTop = (CAMERA_VIEW_HEIGHT * CAMERA_DEADZONE_PERCENT) / 100;
+    int deadZoneBottom = CAMERA_VIEW_HEIGHT - deadZoneTop;
 
     int tempPlayerScreenY = player_y - cam->y;
     if (tempPlayerScreenY < deadZoneTop) {
@@ -69,8 +73,7 @@ void camera_update(Camera* cam, int player_x, int player_y, int level_width, int
         cam->y = player_y - deadZoneBottom;
     }
 
-    int maxCameraY = level_px_h - SCREEN_HEIGHT;
+    int maxCameraY = level_px_h - CAMERA_VIEW_HEIGHT;
     if (cam->y < 0) cam->y = 0;
     if (cam->y > maxCameraY && maxCameraY > 0) cam->y = maxCameraY;
 }
-

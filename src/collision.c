@@ -1,118 +1,81 @@
 /**
- * Pixel-perfect collision implementation - Step 4.
+ * Collision wrappers over Level runtime API.
  */
 
 #include "collision.h"
 
-static int max_i(int a, int b) { return (a > b) ? a : b; }
-static int min_i(int a, int b) { return (a < b) ? a : b; }
+void collision_hits_clear(CollisionHits* hits) {
+    if (!hits) return;
+    for (int i = 0; i < COLLISION_HITS_MAX; i++) {
+        hits->x[i] = -1;
+        hits->y[i] = -1;
+    }
+    hits->overflow = false;
+}
+
+void collision_hits_add(CollisionHits* hits, int tile_x, int tile_y) {
+    if (!hits) return;
+    for (int i = 0; i < COLLISION_HITS_MAX; i++) {
+        if (hits->x[i] == -1) {
+            hits->x[i] = tile_x;
+            hits->y[i] = tile_y;
+            return;
+        }
+    }
+    hits->overflow = true;
+}
 
 void apply_transform(uint8_t transform, int* x, int* y) {
     int k = 15;
     int m = 15;
     int i10 = *x;
     int i11 = *y;
-
-    if (transform & 0x8) {
-        i10 = k - i10;
-    }
-    if (transform & 0x4) {
-        i11 = m - i11;
-    }
-
-    int rotate = transform & 0x3;
-    switch (rotate) {
+    if (transform & 0x8) i10 = k - i10;
+    if (transform & 0x4) i11 = m - i11;
+    switch (transform & 0x3) {
         case 0:
             break;
-        case 1:
-            {
-                int temp = i10;
-                i10 = i11;
-                i11 = m - temp;
-            }
+        case 1: {
+            int t = i10;
+            i10 = i11;
+            i11 = m - t;
             break;
+        }
         case 2:
             i10 = k - i10;
             i11 = m - i11;
             break;
-        case 3:
-            {
-                int temp = i11;
-                i11 = i10;
-                i10 = m - temp;
-            }
+        case 3: {
+            int t = i11;
+            i11 = i10;
+            i10 = m - t;
             break;
+        }
     }
-
     *x = i10;
     *y = i11;
+}
+
+bool collision_test_collect(Level* level, TileMetadata* tile_meta,
+                            CollisionMasks* masks,
+                            int rect_x, int rect_y, int rect_w, int rect_h,
+                            const bool* player_mask, CollisionHits* hits) {
+    (void)tile_meta;
+    (void)masks;
+    if (!level || !hits) return false;
+    bool overflow = false;
+    int obj = -1;
+    bool res = level_test_collision_collect(level, rect_x, rect_y, rect_w, rect_h, player_mask,
+                                            hits->x, hits->y, COLLISION_HITS_MAX, &overflow, &obj);
+    hits->overflow = overflow;
+    return res;
 }
 
 bool collision_test(Level* level, TileMetadata* tile_meta,
                     CollisionMasks* masks,
                     int rect_x, int rect_y, int rect_w, int rect_h,
-                    bool* player_mask) {
-    if (!level || !tile_meta || !masks) return false;
-
-    int start_tile_x = rect_x / 16;
-    int end_tile_x = (rect_x + rect_w - 1) / 16;
-    int start_tile_y = rect_y / 16;
-    int end_tile_y = (rect_y + rect_h - 1) / 16;
-
-    for (int ty = start_tile_y; ty <= end_tile_y; ty++) {
-        for (int tx = start_tile_x; tx <= end_tile_x; tx++) {
-            if (tx < 0 || tx >= (int)level->width || ty < 0 || ty >= (int)level->height) {
-                continue;
-            }
-
-            uint8_t tile_byte = level_get_tile(level, tx, ty);
-            uint8_t tile_id = (uint8_t)(tile_byte & 0x7F);
-            if (tile_id == 0) continue;
-
-            TileMetadata* tm = &tile_meta[tile_id];
-            if (tm->collision_type == 0) continue;
-            if (tm->collision_type == 2) return true;
-
-            int tile_px_x = tx * 16;
-            int tile_px_y = ty * 16;
-
-            int overlap_x1 = max_i(rect_x, tile_px_x);
-            int overlap_y1 = max_i(rect_y, tile_px_y);
-            int overlap_x2 = min_i(rect_x + rect_w, tile_px_x + 16);
-            int overlap_y2 = min_i(rect_y + rect_h, tile_px_y + 16);
-
-            bool** tile_mask = masks->masks[tile_id];
-            if (!tile_mask) continue;
-
-            for (int py = overlap_y1; py < overlap_y2; py++) {
-                for (int px = overlap_x1; px < overlap_x2; px++) {
-                    int tile_local_x = px - tile_px_x;
-                    int tile_local_y = py - tile_px_y;
-
-                    int mask_x = tile_local_x;
-                    int mask_y = tile_local_y;
-                    if (tm->collision_type == 3) {
-                        apply_transform(tm->transform, &mask_x, &mask_y);
-                    }
-
-                    if (!tile_mask[mask_x][mask_y]) {
-                        continue;
-                    }
-
-                    if (player_mask) {
-                        int player_local_x = px - rect_x;
-                        int player_local_y = py - rect_y;
-                        if (!player_mask[player_local_y * rect_w + player_local_x]) {
-                            continue;
-                        }
-                    }
-
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
+                    const bool* player_mask) {
+    (void)tile_meta;
+    (void)masks;
+    return level_test_collision(level, rect_x, rect_y, rect_w, rect_h, player_mask);
 }
-
