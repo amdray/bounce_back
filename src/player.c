@@ -769,6 +769,37 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
         bool blocking = collision_test_collect(level, tile_meta, masks,
                                                rect_x, rect_y, p->mask_w, p->mask_h,
                                                p->active_mask, &hits);
+
+        // Match a.java: after vertical probe, force center tile 101-104 into hit list.
+        // a.java uses R[n][m] with n=(i+b1)/16 and m=D/16 before switch processing.
+        int center_tx = p->x_pos / 16;
+        int center_ty = test_y / 16;
+        if (center_tx >= 0 && center_ty >= 0 &&
+            center_tx < (int)level->width && center_ty < (int)level->height) {
+            uint8_t center_id = (uint8_t)(level_get_tile(level, center_tx, center_ty) & 0x7F);
+            if (center_id == 101 || center_id == 102 || center_id == 103 || center_id == 104) {
+                bool already = false;
+                int free_idx = -1;
+                for (int hh = 0; hh < COLLISION_HITS_MAX; hh++) {
+                    if (hits.x[hh] == center_tx && hits.y[hh] == center_ty) {
+                        already = true;
+                        break;
+                    }
+                    if (free_idx < 0 && hits.x[hh] == -1 && hits.y[hh] == -1) {
+                        free_idx = hh;
+                    }
+                }
+                if (!already && free_idx >= 0) {
+                    hits.x[free_idx] = center_tx;
+                    hits.y[free_idx] = center_ty;
+                    already = true;
+                }
+                if (already) {
+                    blocking = true;
+                }
+            }
+        }
+
         if (level->active_object_index >= 0) p->carrier_object_index = level->active_object_index;
         if (!blocking) {
             p->y_pos = test_y;
@@ -780,20 +811,169 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
         for (int h = 0; h < COLLISION_HITS_MAX; h++) {
             int tx = hits.x[h];
             int ty = hits.y[h];
-            if (tx < 0 || ty < 0) continue;
-            uint8_t hit_id = (uint8_t)(level_get_tile(level, tx, ty) & 0x7F);
+            uint8_t hit_id = 0;
+            uint8_t id_logic = 0;
 
-            if (!p->is_inverted && (hit_id == 94 || hit_id == 96) &&
+            if (tx >= 0 && ty >= 0) {
+                hit_id = (uint8_t)(level_get_tile(level, tx, ty) & 0x7F);
+                id_logic = hit_id;
+            } else if (p->carrier_object_index >= 0 && p->carrier_object_index < level->objects.count) {
+                // Match a.java: when tile slot is empty but object is active, synthesize 200/201/202.
+                uint8_t obj_type = level->objects.ao[p->carrier_object_index];
+                if (obj_type == 2) {
+                    id_logic = 200;
+                } else if (obj_type == 0) {
+                    id_logic = p->is_popped ? 200 : 201;
+                } else {
+                    id_logic = p->is_popped ? 200 : 202;
+                }
+                hit_id = id_logic;
+            } else {
+                continue;
+            }
+
+            if (tx >= 0 && ty >= 0 && !p->is_inverted && (hit_id == 94 || hit_id == 96) &&
                 (p->x_pos - p->half_width == tx * 16)) {
                 p->y_pos = test_y;
                 if (hit_id == 94 && p->y_pos == ty * 16 + 8) {
                     player_collect_tile(p, level, tx, ty, hit_id);
                     update_ring_tile_if_crossed(level, tx, ty, hit_id, p->x_pos, p->y_pos);
                 }
-                resolved = true;
-                break;
+                continue;
             }
-            uint8_t id_logic = hit_id;
+
+            // Match a.java case 94/96: if not aligned for pass-through, try side-shift at the same Y step.
+            if (tx >= 0 && ty >= 0 && (hit_id == 94 || hit_id == 96)) {
+                if (!collision_test(level, tile_meta, masks,
+                                    (p->x_pos + 1) - p->mask_half_w,
+                                    test_y - p->mask_half_h,
+                                    p->mask_w, p->mask_h,
+                                    p->active_mask)) {
+                    p->x_pos += 1;
+                    p->y_pos = test_y;
+                    if (hit_id == 94 && p->y_pos == ty * 16 + 8) {
+                        player_collect_tile(p, level, tx, ty, hit_id);
+                        update_ring_tile_if_crossed(level, tx, ty, hit_id, p->x_pos, p->y_pos);
+                    }
+                    continue;
+                }
+                if (!collision_test(level, tile_meta, masks,
+                                    (p->x_pos - 1) - p->mask_half_w,
+                                    test_y - p->mask_half_h,
+                                    p->mask_w, p->mask_h,
+                                    p->active_mask)) {
+                    p->x_pos -= 1;
+                    p->y_pos = test_y;
+                    if (hit_id == 94 && p->y_pos == ty * 16 + 8) {
+                        player_collect_tile(p, level, tx, ty, hit_id);
+                        update_ring_tile_if_crossed(level, tx, ty, hit_id, p->x_pos, p->y_pos);
+                    }
+                    continue;
+                }
+
+                if (toward_surface) {
+                    if (jump_hold) {
+                        j = calculate_jump_strength(p);
+                        p->is_grounded = false;
+                        p->bounce_state = 0;
+                    } else if (j > 30) {
+                        if (p->bounce_state == 0) {
+                            p->bounce_state = -j;
+                            int min_bounce = calculate_bounce_min(p);
+                            if (p->bounce_state < min_bounce) {
+                                p->bounce_state = min_bounce;
+                            }
+                        }
+                        j = p->bounce_state;
+                        p->bounce_state >>= 1;
+                        if (p->bounce_state > -10) {
+                            p->is_grounded = true;
+                            j = 30;
+                            p->bounce_state = 0;
+                        }
+                    } else if (j > -30) {
+                        p->is_grounded = true;
+                        j = 30;
+                        p->bounce_state = 0;
+                    }
+                } else {
+                    j = 0;
+                }
+                continue;
+            }
+
+            // Match a.java case 101/102/103/104: handled for both vertical directions.
+            if (id_logic == 101 || id_logic == 102 || id_logic == 103 || id_logic == 104) {
+                if (!collision_test(level, tile_meta, masks,
+                                    p->x_pos - p->mask_half_w,
+                                    test_y - p->mask_half_h,
+                                    p->mask_w, p->mask_h,
+                                    p->active_mask)) {
+                    p->y_pos = test_y;
+                    if ((id_logic == 102 || id_logic == 101) && p->y_pos == ty * 16 + 8) {
+                        player_collect_tile(p, level, tx, ty, id_logic);
+                        apply_tile_101_102(level, tx, ty, id_logic);
+                    }
+                    continue;
+                }
+                if (!collision_test(level, tile_meta, masks,
+                                    (p->x_pos + 1) - p->mask_half_w,
+                                    test_y - p->mask_half_h,
+                                    p->mask_w, p->mask_h,
+                                    p->active_mask)) {
+                    p->x_pos += 1;
+                    p->y_pos = test_y;
+                    if ((id_logic == 102 || id_logic == 101) && p->y_pos == ty * 16 + 8) {
+                        player_collect_tile(p, level, tx, ty, id_logic);
+                        apply_tile_101_102(level, tx, ty, id_logic);
+                    }
+                    continue;
+                }
+                if (!collision_test(level, tile_meta, masks,
+                                    (p->x_pos - 1) - p->mask_half_w,
+                                    test_y - p->mask_half_h,
+                                    p->mask_w, p->mask_h,
+                                    p->active_mask)) {
+                    p->x_pos -= 1;
+                    p->y_pos = test_y;
+                    if ((id_logic == 102 || id_logic == 101) && p->y_pos == ty * 16 + 8) {
+                        player_collect_tile(p, level, tx, ty, id_logic);
+                        apply_tile_101_102(level, tx, ty, id_logic);
+                    }
+                    continue;
+                }
+
+                if (toward_surface) {
+                    if (jump_hold) {
+                        j = calculate_jump_strength(p);
+                        p->is_grounded = false;
+                        p->bounce_state = 0;
+                    } else if (j > 30) {
+                        if (p->bounce_state == 0) {
+                            p->bounce_state = -j;
+                            int min_bounce = calculate_bounce_min(p);
+                            if (p->bounce_state < min_bounce) {
+                                p->bounce_state = min_bounce;
+                            }
+                        }
+                        j = p->bounce_state;
+                        p->bounce_state >>= 1;
+                        if (p->bounce_state > -10) {
+                            p->is_grounded = true;
+                            j = 30;
+                            p->bounce_state = 0;
+                        }
+                    } else if (j > -30) {
+                        p->is_grounded = true;
+                        j = 30;
+                        p->bounce_state = 0;
+                    }
+                } else {
+                    j = 0;
+                }
+                continue;
+            }
+
             if (toward_surface) {
                 if (!p->gravity_down) {
                     if (id_logic == 6 || id_logic == 5) id_logic = 2;
@@ -814,79 +994,6 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
 
             if (!toward_surface) {
                 switch (id_logic) {
-                    case 101:
-                    case 102:
-                    case 103:
-                    case 104:
-                        if (!collision_test(level, tile_meta, masks,
-                                            p->x_pos - p->mask_half_w,
-                                            test_y - p->mask_half_h,
-                                            p->mask_w, p->mask_h,
-                                            p->active_mask)) {
-                            p->y_pos = test_y;
-                            if ((id_logic == 102 || id_logic == 101) && p->y_pos == ty * 16 + 8) {
-                                player_collect_tile(p, level, tx, ty, id_logic);
-                                apply_tile_101_102(level, tx, ty, id_logic);
-                            }
-                            resolved = true;
-                        } else if (!collision_test(level, tile_meta, masks,
-                                                   (p->x_pos + 1) - p->mask_half_w,
-                                                   test_y - p->mask_half_h,
-                                                   p->mask_w, p->mask_h,
-                                                   p->active_mask)) {
-                            p->x_pos += 1;
-                            p->y_pos = test_y;
-                            if ((id_logic == 102 || id_logic == 101) && p->y_pos == ty * 16 + 8) {
-                                player_collect_tile(p, level, tx, ty, id_logic);
-                                apply_tile_101_102(level, tx, ty, id_logic);
-                            }
-                            resolved = true;
-                        } else if (!collision_test(level, tile_meta, masks,
-                                                   (p->x_pos - 1) - p->mask_half_w,
-                                                   test_y - p->mask_half_h,
-                                                   p->mask_w, p->mask_h,
-                                                   p->active_mask)) {
-                            p->x_pos -= 1;
-                            p->y_pos = test_y;
-                            if ((id_logic == 102 || id_logic == 101) && p->y_pos == ty * 16 + 8) {
-                                player_collect_tile(p, level, tx, ty, id_logic);
-                                apply_tile_101_102(level, tx, ty, id_logic);
-                            }
-                            resolved = true;
-                        } else {
-                            // When can't slide on tiles 101-104, resolve bounce or set to 0
-                            if (toward_surface) {
-                                // Bounce logic similar to case 2 flat surface
-                                if (jump_hold) {
-                                    j = calculate_jump_strength(p);
-                                    p->is_grounded = false;
-                                    p->bounce_state = 0;
-                                } else if (j > 30) {
-                                    if (p->bounce_state == 0) {
-                                        p->bounce_state = -j;
-                                        int min_bounce = calculate_bounce_min(p);
-                                        if (p->bounce_state < min_bounce) {
-                                            p->bounce_state = min_bounce;
-                                        }
-                                    }
-                                    j = p->bounce_state;
-                                    p->bounce_state = (3 * p->bounce_state) >> 2;
-                                    if (p->bounce_state > -10) {
-                                        p->is_grounded = true;
-                                        j = 30;
-                                        p->bounce_state = 0;
-                                    }
-                                } else if (j > -30) {
-                                    p->is_grounded = true;
-                                    j = 30;
-                                    p->bounce_state = 0;
-                                }
-                            } else {
-                                j = 0;
-                            }
-                            resolved = true;
-                        }
-                        break;
                     case 3:
                     case 6:
                     case 113:
@@ -988,6 +1095,12 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         resolved = true;
                         break;
                     default:
+                        if ((id_logic == 7 || id_logic == 8) && p->is_popped) {
+                            player_apply_tile_break(level, tx, ty);
+                        }
+                        // Upward blocking collision in original code zeros vertical speed.
+                        j = 0;
+                        resolved = true;
                         break;
                 }
             } else {
@@ -1163,7 +1276,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                                 }
                             }
                             j = p->bounce_state;
-                            p->bounce_state = (3 * p->bounce_state) >> 2;
+                            p->bounce_state >>= 1;
                             if (p->bounce_state > -10) {
                                 p->is_grounded = true;
                                 j = 30;
@@ -1340,7 +1453,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                                     }
                                 }
                                 j = p->bounce_state;
-                                p->bounce_state = (3 * p->bounce_state) >> 2;
+                                p->bounce_state >>= 1;
                                 if (p->bounce_state > -10) {
                                     p->is_grounded = true;
                                     j = 30;
@@ -1455,6 +1568,37 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
         bool blocking = collision_test_collect(level, tile_meta, masks,
                                                rect_x, rect_y, p->mask_w, p->mask_h,
                                                p->active_mask, &hits);
+
+        // Match a.java horizontal probe: force center tile 97-100 into hit list.
+        // a.java uses i6=(D+b3)/16 and i7=i/16 before switch processing.
+        int center_tx = test_x / 16;
+        int center_ty = p->y_pos / 16;
+        if (center_tx >= 0 && center_ty >= 0 &&
+            center_tx < (int)level->width && center_ty < (int)level->height) {
+            uint8_t center_id = (uint8_t)(level_get_tile(level, center_tx, center_ty) & 0x7F);
+            if (center_id == 97 || center_id == 98 || center_id == 99 || center_id == 100) {
+                bool already = false;
+                int free_idx = -1;
+                for (int hh = 0; hh < COLLISION_HITS_MAX; hh++) {
+                    if (hits.x[hh] == center_tx && hits.y[hh] == center_ty) {
+                        already = true;
+                        break;
+                    }
+                    if (free_idx < 0 && hits.x[hh] == -1 && hits.y[hh] == -1) {
+                        free_idx = hh;
+                    }
+                }
+                if (!already && free_idx >= 0) {
+                    hits.x[free_idx] = center_tx;
+                    hits.y[free_idx] = center_ty;
+                    already = true;
+                }
+                if (already) {
+                    blocking = true;
+                }
+            }
+        }
+
         if (level->active_object_index >= 0) p->carrier_object_index = level->active_object_index;
         if (!blocking) {
             p->x_pos = test_x;
@@ -1478,9 +1622,26 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
         for (int h = 0; h < COLLISION_HITS_MAX; h++) {
             int tx = hits.x[h];
             int ty = hits.y[h];
-            if (tx < 0 || ty < 0) continue;
-            uint8_t hit_id = (uint8_t)(level_get_tile(level, tx, ty) & 0x7F);
-            uint8_t id_logic = hit_id;
+            uint8_t hit_id = 0;
+            uint8_t id_logic = 0;
+
+            if (tx >= 0 && ty >= 0) {
+                hit_id = (uint8_t)(level_get_tile(level, tx, ty) & 0x7F);
+                id_logic = hit_id;
+            } else if (p->carrier_object_index >= 0 && p->carrier_object_index < level->objects.count) {
+                // Match a.java: when tile slot is empty but object is active, synthesize 200/201/202.
+                uint8_t obj_type = level->objects.ao[p->carrier_object_index];
+                if (obj_type == 2) {
+                    id_logic = 200;
+                } else if (obj_type == 0) {
+                    id_logic = p->is_popped ? 200 : 201;
+                } else {
+                    id_logic = p->is_popped ? 200 : 202;
+                }
+                hit_id = id_logic;
+            } else {
+                continue;
+            }
 
             if (step_x > 0) {
                 if (id_logic == 114) id_logic = 110;
@@ -1490,7 +1651,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                 if (id_logic == 6) id_logic = 2;
             }
 
-            if (!p->is_inverted &&
+            if (tx >= 0 && ty >= 0 && !p->is_inverted &&
                 (id_logic == 93 || id_logic == 95) &&
                 (p->y_pos - p->half_height == ty * 16)) {
                 p->x_pos = test_x;
@@ -1517,7 +1678,6 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                             resolved = true;
                         } else if (!p->has_grav_bonus || !p->is_inverted) {
                             p->y_pos -= 1;
-                            s--;
                             resolved = true;
                         }
                     }
@@ -1536,7 +1696,6 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                             resolved = true;
                         } else {
                             p->y_pos += 1;
-                            s--;
                             resolved = true;
                         }
                     }
@@ -1563,6 +1722,10 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     }
                     break;
                 }
+                case 93:
+                case 95:
+                    // Match a.java case 93/95: if pass-through precondition failed, tile stays blocking.
+                    break;
                 case 97:
                 case 98:
                 case 99:
@@ -1738,7 +1901,13 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
             }
             if (resolved) break;
         }
-        if (resolved) break;
+        if (resolved) {
+            if (p->is_dying) {
+                i = 0;
+                break;
+            }
+            continue;
+        }
     }
 
     if (p->is_grounded) p->bounce_state = 0;

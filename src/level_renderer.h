@@ -12,8 +12,6 @@
 #include "tile_metadata.h"
 #include "tile_animation.h"
 #include "tileset_loader.h"
-#include "foreground_pass.h"
-#include "player.h"
 
 typedef struct {
     Level* level;
@@ -26,8 +24,6 @@ LevelRenderer* renderer_create(Level* level, TileMetadata* meta, TileAnimation* 
 void renderer_free(LevelRenderer* renderer);
 void renderer_draw(LevelRenderer* lr,
                    SDL_Renderer* r,
-                   Player* player,
-                   const ForegroundPass* fg,
                    int camera_x,
                    int camera_y);
 

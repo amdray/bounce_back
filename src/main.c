@@ -5,10 +5,12 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <stdint.h>
 #include <stdio.h>
 #include "bg_layer.h"
 #include "camera.h"
 #include "collision_masks.h"
+#include "enemy_renderer.h"
 #include "input.h"
 #include "level_loader.h"
 #include "level_renderer.h"
@@ -23,7 +25,7 @@
 #define SCREEN_WIDTH  480
 #define SCREEN_HEIGHT 272
 #define DEFAULT_LEVEL_INDEX 0
-#define LEVEL_COUNT 22
+#define LEVEL_COUNT 21
 
 static int reload_level_state(SDL_Renderer* sdl_renderer,
                               int new_level_index,
@@ -281,6 +283,24 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    if (enemy_renderer_init(renderer) != 0) {
+        if (log) { fprintf(log, "Failed to init enemy renderer\n"); fclose(log); }
+        hud_shutdown();
+        player_free(player);
+        bg_layer_free(bg_layer);
+        renderer_free(level_renderer);
+        collision_masks_free(collision_masks);
+        animation_free(tile_anim);
+        tilemetadata_free(tile_meta);
+        free(fg.front_tiles);
+        level_free(level);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        IMG_Quit();
+        SDL_Quit();
+        return 1;
+    }
+
     input_init();
 
     SDL_Event event;
@@ -293,6 +313,9 @@ int main(int argc, char *argv[]) {
     ExitDoorState door = (ExitDoorState){0};
     door.I = 0;
     door.open = false;
+
+    int total_score = 0;
+    uint32_t level_start_ticks = SDL_GetTicks();
 
     while (running) {
         int level_delta = 0;
@@ -311,21 +334,26 @@ int main(int argc, char *argv[]) {
         }
 
         if (level_delta != 0) {
+            int preserved_lives = player ? player->lives : 3;
             int next_level = (level_index + level_delta + LEVEL_COUNT) % LEVEL_COUNT;
-            (void)reload_level_state(renderer,
-                                     next_level,
-                                     &level_index,
-                                     &level,
-                                     &bg_layer,
-                                     &fg,
-                                     tile_meta,
-                                     tile_anim,
-                                     &tileset,
-                                     &level_renderer,
-                                     &player,
-                                     &camera,
-                                     &door,
-                                     log);
+            int switched = reload_level_state(renderer,
+                                              next_level,
+                                              &level_index,
+                                              &level,
+                                              &bg_layer,
+                                              &fg,
+                                              tile_meta,
+                                              tile_anim,
+                                              &tileset,
+                                              &level_renderer,
+                                              &player,
+                                              &camera,
+                                              &door,
+                                              log);
+            if (switched) {
+                player->lives = preserved_lives;
+                level_start_ticks = SDL_GetTicks();
+            }
         }
 
         input_update(&input);
@@ -347,10 +375,76 @@ int main(int argc, char *argv[]) {
                            player->is_popped);
         player_update(player, level, tile_meta, collision_masks, &input);
 
+        if (player->lives <= 0) {
+            if (log) fprintf(log, "GAME_OVER\n");
+            total_score = 0;
+            if (reload_level_state(renderer,
+                                   DEFAULT_LEVEL_INDEX,
+                                   &level_index,
+                                   &level,
+                                   &bg_layer,
+                                   &fg,
+                                   tile_meta,
+                                   tile_anim,
+                                   &tileset,
+                                   &level_renderer,
+                                   &player,
+                                   &camera,
+                                   &door,
+                                   log)) {
+                player->lives = 3;
+                level_start_ticks = SDL_GetTicks();
+            }
+            continue;
+        }
+
         exit_door_tick(&door, level->hoops_remaining);
         if (exit_door_test_complete(&door, level, player)) {
-            if (log) fprintf(log, "LEVEL_COMPLETE\n");
-            running = 0;
+            uint32_t level_timer_ms = SDL_GetTicks() - level_start_ticks;
+            int level_seconds = (int)(level_timer_ms / 1000U);
+            int time_bonus = (1200 - level_seconds) * (level_index + 1);
+            if (time_bonus < 0) {
+                time_bonus = 0;
+            }
+            int level_points_bonus = player->score / 10;
+            int stage_bonus = time_bonus + level_points_bonus;
+            total_score += stage_bonus;
+
+            if (log) {
+                fprintf(log,
+                        "LEVEL_COMPLETE level=%d timer_ms=%lu stage_score=%d bonus=%d total=%d\n",
+                        level_index,
+                        (unsigned long)level_timer_ms,
+                        player->score,
+                        stage_bonus,
+                        total_score);
+            }
+
+            if (level_index == 20) {
+                if (log) fprintf(log, "CONGRATULATIONS\n");
+                running = 0;
+                continue;
+            }
+
+            int preserved_lives = player->lives;
+            if (reload_level_state(renderer,
+                                   level_index + 1,
+                                   &level_index,
+                                   &level,
+                                   &bg_layer,
+                                   &fg,
+                                   tile_meta,
+                                   tile_anim,
+                                   &tileset,
+                                   &level_renderer,
+                                   &player,
+                                   &camera,
+                                   &door,
+                                   log)) {
+                player->lives = preserved_lives;
+                level_start_ticks = SDL_GetTicks();
+            }
+            continue;
         }
 
         camera_update(&camera, player->x_pos, player->y_pos, level->width, level->height);
@@ -361,7 +455,10 @@ int main(int argc, char *argv[]) {
 
         animation_tick(tile_anim);
         bg_layer_draw(bg_layer, renderer, camera.x >> 1, camera.y >> 1, SCREEN_WIDTH, SCREEN_HEIGHT);
-        renderer_draw(level_renderer, renderer, player, &fg, camera.x, camera.y);
+        renderer_draw(level_renderer, renderer, camera.x, camera.y);
+        enemy_renderer_draw(renderer, level, camera.x, camera.y);
+        player_render(player, renderer, camera.x, camera.y);
+        foreground_pass_draw(renderer, level, tile_meta, tile_anim, tileset, &fg, camera.x, camera.y);
         HudState hud = {
             .score = player->score,
             .num_lives = player->lives,
@@ -382,6 +479,7 @@ int main(int argc, char *argv[]) {
 
     if (log) { fprintf(log, "Shutdown OK\n"); fclose(log); }
     input_cleanup();
+    enemy_renderer_shutdown();
     hud_shutdown();
     player_free(player);
     bg_layer_free(bg_layer);

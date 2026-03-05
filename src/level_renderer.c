@@ -28,8 +28,6 @@ void renderer_free(LevelRenderer* renderer) {
 
 void renderer_draw(LevelRenderer* lr,
                    SDL_Renderer* r,
-                   Player* player,
-                   const ForegroundPass* fg,
                    int camera_x,
                    int camera_y) {
     if (!lr || !lr->level || !lr->tile_meta || !lr->tileset || !r) return;
@@ -72,11 +70,4 @@ void renderer_draw(LevelRenderer* lr,
         }
     }
 
-    if (player) {
-        player_render(player, r, camera_x, camera_y);
-    }
-
-    if (fg) {
-        foreground_pass_draw(r, lr->level, lr->tile_meta, lr->tile_anim, lr->tileset, fg, camera_x, camera_y);
-    }
 }

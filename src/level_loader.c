@@ -30,10 +30,10 @@ static uint32_t read_be32(const uint8_t* p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
 }
 
-static int wrap_mod(int value, int mod) {
-    if (mod <= 0) return 0;
-    int r = value % mod;
-    return (r < 0) ? (r + mod) : r;
+static int clamp_0_to_max(int value, int max_exclusive) {
+    if (value < 0) return 0;
+    if (value >= max_exclusive) return max_exclusive - 1;
+    return value;
 }
 
 static int ptr_seen(bool*** seen, size_t seen_count, bool** ptr) {
@@ -454,57 +454,76 @@ void level_objects_tick(Level* level,
         int b3 = level->objects.s[idx][1];
 
         if (type == 0 || type == 2) {
-            int lim_y = (i3 - i1) * 16;
-            int lim_x = (i2 - n) * 16;
-            const int obj_h = object_height(level, idx, 0);
-            const int obj_w = object_width(level, idx, 0);
+            int i6 = object_width(level, idx, 0);
+            int i7 = object_height(level, idx, 0);
+            int b4 = (b2 > 0) ? 1 : -1;
+            int i8 = abs(b2);
+            int i9 = i1 * 16 + i4;
+            int i10 = n * 16 + i5;
+            int i11 = i9 + i6;
+            int i12 = i10 + i7;
+            int i13 = (i3 - i1) * 16;
+            int i14 = (i2 - n) * 16;
 
-            int step = (b2 > 0) ? 1 : -1;
-            for (int c = 0, cnt = abs(b2); c < cnt; c++) {
-                // Java h.java: when popped ball overlaps type-0 enemy, skip enemy movement step.
-                if (type == 0 && player_is_popped) {
-                    int top = n * 16 + i4;
-                    int left = i1 * 16 + i5;
-                    if (rects_overlap(left, top, left + obj_w, top + obj_h,
-                                      player_left, player_top, player_right, player_bottom)) {
-                        continue;
+            for (int c = 0; c < i8; c++) {
+                if (player_is_popped && type == 0) {
+                    if (!rects_overlap(i9, i10, i11, i12,
+                                       player_left, player_top, player_right, player_bottom)) {
+                        i4 += b4;
                     }
+                } else {
+                    i4 += b4;
                 }
-                i4 += step;
-                if (i4 == 0 || i4 == lim_y) {
+                if (i4 == 0 || i4 == i13) {
                     b2 = -b2;
-                    step = -step;
+                    b4 = -b4;
                 }
             }
-            i4 = wrap_mod(i4, lim_y + 1);
+            i4 = clamp_0_to_max(i4, i13 + 1);
 
-            step = (b3 > 0) ? 1 : -1;
-            for (int c = 0, cnt = abs(b3); c < cnt; c++) {
-                if (type == 0 && player_is_popped) {
-                    int top = n * 16 + i4;
-                    int left = i1 * 16 + i5;
-                    if (rects_overlap(left, top, left + obj_w, top + obj_h,
-                                      player_left, player_top, player_right, player_bottom)) {
-                        continue;
+            b4 = (b3 > 0) ? 1 : -1;
+            i8 = abs(b3);
+            for (int c = 0; c < i8; c++) {
+                if (player_is_popped && type == 0) {
+                    if (!rects_overlap(i9, i10, i11, i12,
+                                       player_left, player_top, player_right, player_bottom)) {
+                        i5 += b4;
                     }
+                } else {
+                    i5 += b4;
                 }
-                i5 += step;
-                if (i5 == 0 || i5 == lim_x) {
+                if (i5 == 0 || i5 == i14) {
                     b3 = -b3;
-                    step = -step;
                 }
             }
-            i5 = wrap_mod(i5, lim_x + 1);
+            i5 = clamp_0_to_max(i5, i14 + 1);
         } else {
-            int lim = (i2 - n) * 16;
+            int i6 = (i2 - n) * 16;
             if (i5 == 0) b3 = 30;
-            if (i5 == lim) b3 = -40;
+            if (i5 == i6) b3 = -40;
             if (++b3 > 80) b3 = 80;
-            int step = (b3 > 0) ? 1 : -1;
-            int cnt = abs(b3 / 10);
-            if (cnt > 3) cnt = 3;
-            for (int c = 0; c < cnt; c++) i5 += step;
-            i5 = wrap_mod(i5, lim + 1);
+
+            int i7 = object_width(level, idx, 0);
+            int i8 = object_height(level, idx, 0);
+            int b4 = (b3 > 0) ? 1 : -1;
+            int i9 = abs(b3 / 10);
+            if (i9 > 3) i9 = 3;
+
+            for (int c = 0; c < i9; c++) {
+                if (player_is_popped) {
+                    int i10 = i1 * 16;
+                    int i11 = n * 16 + i5;
+                    int i12 = i10 + i7;
+                    int i13 = i11 + i8;
+                    if (!rects_overlap(i10, i11, i12, i13,
+                                       player_left, player_top, player_right, player_bottom)) {
+                        i5 += b4;
+                    }
+                } else {
+                    i5 += b4;
+                }
+            }
+            i5 = clamp_0_to_max(i5, i6 + 1);
         }
 
         level->objects.ag[idx][0] = i4;
@@ -589,7 +608,8 @@ bool level_test_collision_collect(Level* level,
                             apply_transform_16(level->transform[tile_id], &mask_x, &mask_y);
                         }
                         if (mask_x < 0 || mask_y < 0 || mask_x >= level->tile_w || mask_y >= level->tile_h) continue;
-                        if (!tile_mask[mask_x][mask_y]) continue;
+                        // Java g.java samples tile mask as s[y][x] in collision checks.
+                        if (!tile_mask[mask_y][mask_x]) continue;
                         if (player_mask) {
                             int local_x = px - rect_x;
                             int local_y = py - rect_y;
