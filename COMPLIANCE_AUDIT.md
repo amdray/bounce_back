@@ -1,6 +1,6 @@
 # Аудит соответствия: Java MIDP → C (PSPSDK + SDL2)
 
-**Дата:** 2026-02-09  
+**Дата:** 2026-03-05  
 **Эталон:** Java MIDP (J2ME) — `original_code/bounce_back_s60.jar.src/`  
 **Порт:** C (PSPSDK + SDL2) — `src/`
 
@@ -27,7 +27,7 @@
 | Tile-анимации | `g.java::d()` | `tile_animation.c::animation_tick()` | Высокая |
 | Tile-трансформации | `g.java::p[]` lookup | `tile_transform.c::draw_tile_with_transform()` | Высокая |
 | Враги (AI/тик) | `h.java::d()` | `level_loader.c::level_objects_tick()` | Высокая |
-| Враги (рендер) | `h.java::b(Graphics)` | **Отсутствует** | Высокая |
+| Враги (рендер) | `h.java::b(Graphics)` | `enemy_renderer.c::enemy_renderer_draw()` | Высокая |
 | Кольца (hoops) | `a.java::b(int,int)`, `h.java::g()` | `player.c::player_collect_tile()`, `update_ring_tile_if_crossed()` | Высокая |
 | Кольца (рендер оверлей) | `h.java::a(Graphics,K)` | **Отсутствует** | Высокая |
 | Выходная дверь (логика) | `h.java` (inline) | `exit_door.c` | Высокая |
@@ -38,7 +38,7 @@
 | Камера | `g.java::c(int,int)` | `camera.c::camera_update()` | Средняя |
 | HUD | `h.java::a(Graphics)` | `hud.c::hud_render()` | Средняя |
 | Ввод | `h.java::keyPressed/Released` | `input.c::input_update()` | Высокая |
-| Смена уровня / жизни | `CrystalMidlet.java` | **Частично отсутствует** | Высокая |
+| Смена уровня / жизни | `CrystalMidlet.java` | `main.c::reload_level_state()`, ветка `player->lives <= 0` | Высокая |
 | Демо-реплей | `d.java`, `b.java` | **Отсутствует** | Высокая |
 | Foreground-проход | `h.java::a(Graphics,K)` (DirectGraphics) | `foreground_pass.c` | Средняя |
 
@@ -81,12 +81,10 @@
 
 | Проверка | Результат | Доказательство |
 |---|---|---|
-| Общий порядок слоёв | **MISMATCH** | Java `h.java:589-610`: BG → FG tiles → Exit door → Enemies → Player → Hoop overlays → HUD. C `main.c:320-349` + `level_renderer.c:48-83`: BG → Tiles → **Player** → Foreground pass → HUD. **Отсутствуют слои:** exit door sprite, enemy sprites, hoop overlay sprites. |
+| Общий порядок слоёв | **PARTIAL** | Java `h.java:589-610`: BG → FG tiles → Exit door → Enemies → Player → Hoop overlays → HUD. C `main.c`: BG → Tiles → Enemies → Player → Foreground pass → HUD. Враги теперь рендерятся, но слои exit door sprite и hoop overlays остаются отсутствующими. |
 
-> **MISMATCH 3.4a — Отсутствует рендер врагов**  
-> **Природа:** В Java `h.java::b(Graphics)` рисует до 10 врагов с 4 спрайтами (`ac[0..3]`) из `/res/ic`. В C нет вызова отрисовки врагов — `level_objects_tick()` обновляет позиции, но спрайты не рендерятся.  
-> **Сценарий:** Все враги невидимы, хотя коллизии с ними работают.  
-> **Не в пределах исключений.**
+> **RESOLVED 3.4a — Рендер врагов реализован**  
+> **Факт:** В `main.c` вызывается `enemy_renderer_draw(...)`, а `enemy_renderer.c` рисует 3 типа объектов из `level->objects` с текстурами из `/res/ic`.
 
 > **MISMATCH 3.4b — Отсутствует рендер выходной двери**  
 > **Природа:** Java `h.java::c(Graphics)` рисует дверь (открытие: 48 кадров, цикл 48→72). C: `exit_door_tick()` обновляет состояние анимации, но спрайт двери не рисуется.  
@@ -284,12 +282,10 @@
 |---|---|---|
 | Условие открытия | **MATCH** | Java: `hoops_remaining == 0`. C: `hoops_remaining == 0` (`exit_door.c`). |
 | Анимация (тики) | **MATCH** | Java: 0→48 (открытие), 48→72→48 (цикл). C: identical. |
-| **Действие при входе** | **MISMATCH** | Java: бонус `max(0, (1200 - seconds) × level)`, переход на следующий уровень, обновление рекордов. C: `running = 0` — **выход из программы**. |
+| Действие при входе | **PARTIAL** | C теперь считает `time_bonus`, добавляет stage bonus, переходит на следующий уровень через `reload_level_state()`. Отличие: на финальном уровне (`level_index == 20`) выполняется завершение приложения (`running = 0`) вместо отдельной win-сцены/flow из MIDP. |
 
-> **MISMATCH 5.6 — Нет прогрессии уровней**  
-> **Природа:** Java `CrystalMidlet.java:222-237` — рассчитывает временной бонус, добавляет очки, переходит к следующему уровню. C `main.c` — устанавливает `running = 0`, что завершает игровой цикл и программу.  
-> **Сценарий:** Завершение любого уровня приводит к выходу из игры вместо перехода к следующему.  
-> **Не в пределах исключений.** Фундаментальная недоработка.
+> **RESOLVED 5.6a — Прогрессия уровней реализована**  
+> **Факт:** В `main.c` после `exit_door_test_complete()` выполняется переход на `level_index + 1` (кроме последнего уровня).
 
 ### 5.7 Система жизней и Game Over
 
@@ -297,17 +293,16 @@
 |---|---|---|
 | Начальные жизни | **MATCH** | Java: `this.h = 3`. C: `player->lives = 3` (implicit in init). |
 | Вычитание при смерти | **MATCH** | Java: `this.o.h--`. C: `p->lives--` в `player_respawn()`. |
-| **Проверка Game Over** | **MISMATCH** | Java: `if(this.o.h == 0) this.E.H.f()` — показывает game over screen. C: **нет проверки `lives == 0` в main loop** — игрок бесконечно респавнится с отрицательными жизнями. |
+| Проверка Game Over | **PARTIAL** | В `main.c` есть проверка `if (player->lives <= 0)`: выполняется сброс счёта, перезагрузка уровня 0 и восстановление жизней до 3. Отличие от MIDP: нет отдельного Game Over экрана/состояния UI. |
 
-> **MISMATCH 5.7 — Нет Game Over**  
-> **Природа:** Java `a.java:600-604` — при `lives == 0` вызывает `CrystalMidlet.f()` (экран game over). C: нет эквивалентной проверки, `player_respawn()` вычитает жизнь, но main loop не реагирует на `lives <= 0`.  
-> **Сценарий:** Игрок может умирать бесконечно, жизни уходят в минус.
+> **RESOLVED 5.7a — Бесконечные жизни устранены**  
+> **Факт:** Ветка `player->lives <= 0` в `main.c` предотвращает уход жизней в минусовой бесконечный цикл.
 
 ### 5.8 Подсчёт уровней
 
 | Проверка | Результат | Доказательство |
 |---|---|---|
-| **Количество уровней** | **MISMATCH** | Java: 21 уровень (indices 0–20). C: `LEVEL_COUNT = 22`. При debug-переключении уровней можно выйти за пределы данных. |
+| Количество уровней | **MATCH** | Java: 21 уровень (indices 0–20). C: `LEVEL_COUNT = 21` в `main.c`. |
 
 ### 5.9 Разрушаемые блоки
 
@@ -319,7 +314,7 @@
 
 | Проверка | Результат | Доказательство |
 |---|---|---|
-| **Таймер для временного бонуса** | **MISMATCH** | Java: `this.g` (long) — отсчитывает время в ms, используется для бонуса `(1200-секунды)×уровень`. C: **нет таймера уровня** нигде в коде. |
+| Таймер для временного бонуса | **MATCH** | C: `level_start_ticks = SDL_GetTicks()` и расчёт `level_timer_ms`, `level_seconds`, `time_bonus` в ветке завершения уровня (`main.c`). |
 
 ### 5.11 Демо-реплей
 
@@ -349,31 +344,28 @@
 | # | ID | Описание | Файл/строка |
 |---|---|---|---|
 | 1 | MISMATCH 4.5 | **Bounce decay 75% вместо 50%** на плоских поверхностях — мяч отскакивает в ~2 раза дольше | `player.c:1169`, `:1352`, `:878` |
-| 2 | MISMATCH 5.6 | **Нет прогрессии уровней** — завершение уровня = выход из программы | `main.c` (exit_door_test_complete → running=0) |
-| 3 | MISMATCH 5.7 | **Нет Game Over** — бесконечные жизни, нет проверки lives ≤ 0 | `main.c` (нет проверки) |
-| 4 | MISMATCH 3.4a | **Враги не рендерятся** — невидимы, но коллизии работают | `level_renderer.c` (нет draw call) |
-| 5 | MISMATCH 3.3a | **Трансформации тайлов не применяются** в основном проходе | `level_renderer.c:74` |
+| 2 | MISMATCH 3.3a | **Трансформации тайлов не применяются** в основном проходе | `level_renderer.c` |
 
 ### Значительные (визуальные/механические)
 
 | # | ID | Описание | Файл/строка |
 |---|---|---|---|
-| 6 | MISMATCH 3.4b | Дверь выхода не рендерится | `level_renderer.c` (нет draw call) |
-| 7 | MISMATCH 3.4c | Hoop overlay не рендерится | `level_renderer.c` (нет draw call) |
-| 8 | MISMATCH 3.5a | Alpha водных тайлов = 255 вместо 0x7F | `level_renderer.c:62-65` |
-| 9 | MISMATCH 3.5b | Фоновый цвет захардкожен (адаптация под современные дисплеи) | `bg_layer.c:245-247` |
-| 10 | MISMATCH 3.3b | Трансформации фоновых тайлов не применяются | `bg_layer.c:258` |
-| 11 | MISMATCH 5.10 | Нет таймера уровня → нет временного бонуса | `main.c` |
-| 12 | MISMATCH 5.8 | LEVEL_COUNT = 22 вместо 21 | `main.c` |
+| 3 | MISMATCH 3.4b | Дверь выхода не рендерится (логика есть, спрайт отсутствует) | `main.c` / `exit_door.c` |
+| 4 | MISMATCH 3.4c | Hoop overlay не рендерится | `foreground_pass.c` / основной рендер-пайплайн |
+| 5 | MISMATCH 3.5a | Alpha водных тайлов = 255 вместо 0x7F | `level_renderer.c` |
+| 6 | MISMATCH 3.5b | Фоновый цвет захардкожен (адаптация под современные дисплеи) | `bg_layer.c` |
+| 7 | MISMATCH 3.3b | Трансформации фоновых тайлов не применяются | `bg_layer.c` |
+| 8 | PARTIAL 5.6 | На финальном уровне приложение завершается без отдельной win-сцены | `main.c` |
+| 9 | PARTIAL 5.7 | Нет отдельного Game Over экрана, только логический reset | `main.c` |
 
 ### Минорные
 
 | # | ID | Описание | Файл/строка |
 |---|---|---|---|
-| 13 | MISMATCH 4.1 | SDL_Delay(50) без компенсации elapsed time | `main.c` |
-| 14 | MISMATCH 4.2 | animation_tick в фазе render вместо update | `main.c` |
-| 15 | MISMATCH 5.11 | Demo replay не реализован | — |
-| 16 | MISMATCH 5.12 | Звуки не реализованы | — |
+| 10 | MISMATCH 4.1 | SDL_Delay(50) без компенсации elapsed time | `main.c` |
+| 11 | MISMATCH 4.2 | animation_tick в фазе render вместо update | `main.c` |
+| 12 | MISMATCH 5.11 | Demo replay не реализован | — |
+| 13 | MISMATCH 5.12 | Звуки не реализованы | — |
 
 ### Совпадения (подтверждённые)
 
@@ -383,6 +375,7 @@
 | Пиксельная коллизия (типы 0/1/2/3, трансформации для type 3) | **MATCH** |
 | Маски коллизий игрока (3 набора, выбор по sprite_index) | **MATCH** |
 | Все 3 типа врагов (AI, размеры, движение) | **MATCH** |
+| Рендер врагов (sprites из `/res/ic`) | **MATCH** |
 | Все 6 типов колец (условия сбора, центрирование, подсчёт) | **MATCH** |
 | Тайловые эффекты поверхности (15, 26, 39) | **MATCH** |
 | Трансформации мяча (тайлы 11, 18, 22) | **MATCH** |
@@ -396,6 +389,9 @@
 | Таймеры (popped=550, powerup=450, death=25) | **MATCH** |
 | Инверсия гравитации | **MATCH** |
 | Анимация двери (48 кадров + цикл 48–72) | **MATCH** |
+| Прогрессия уровней + расчёт временного бонуса | **MATCH** |
+| Количество уровней (`LEVEL_COUNT=21`) | **MATCH** |
+| Логика Game Over reset (без отдельного UI-экрана) | **PARTIAL** |
 | Выбор маски коллизий (0=normal, 1=big) | **MATCH** |
 
 ---
