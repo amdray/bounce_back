@@ -72,12 +72,7 @@
 
 | Проверка | Результат | Доказательство |
 |---|---|---|
-| Общий порядок слоёв | **PARTIAL** | Java `h.java:589-610`: BG → FG tiles → Exit door → Enemies → Player → Hoop overlays → HUD. C `main.c`: BG → Tiles → Enemies → Player → Foreground pass (hoops) → HUD. Враги и hoop overlays рендерятся. Отсутствует только слой exit door sprite. |
-
-> **MISMATCH 3.4b — Отсутствует рендер выходной двери**  
-> **Природа:** Java `h.java::c(Graphics)` рисует дверь (открытие: 48 кадров, цикл 48→72). C: `exit_door_tick()` обновляет состояние анимации, но спрайт двери не рисуется.  
-> **Сценарий:** Выходная дверь невидима, хотя логика входа работает.  
-> **Не в пределах исключений.**
+| Общий порядок слоёв | **MATCH** | Java `h.java:589-610`: BG → FG tiles → Exit door → Enemies → Player → Hoop overlays → HUD. C `main.c`: BG → Tiles → Exit door (`exit_door_render`) → Enemies → Player → Foreground pass (hoops) → HUD. |
 
 ### 3.5 Цвет фона для водных/флаговых тайлов
 
