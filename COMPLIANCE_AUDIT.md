@@ -29,7 +29,7 @@
 | Враги (AI/тик) | `h.java::d()` | `level_loader.c::level_objects_tick()` | Высокая |
 | Враги (рендер) | `h.java::b(Graphics)` | `enemy_renderer.c::enemy_renderer_draw()` | Высокая |
 | Кольца (hoops) | `a.java::b(int,int)`, `h.java::g()` | `player.c::player_collect_tile()`, `update_ring_tile_if_crossed()` | Высокая |
-| Кольца (рендер оверлей) | `h.java::a(Graphics,K)` | **Отсутствует** | Высокая |
+| Кольца (рендер оверлей) | `h.java::a(Graphics,K)` | `foreground_pass.c` | Высокая |
 | Выходная дверь (логика) | `h.java` (inline) | `exit_door.c` | Высокая |
 | Выходная дверь (рендер) | `h.java::c(Graphics)` | **Отсутствует** | Высокая |
 | Загрузка уровня | `h.java::b(int)` | `level_loader.c::level_load()` | Высокая |
@@ -40,7 +40,7 @@
 | Ввод | `h.java::keyPressed/Released` | `input.c::input_update()` | Высокая |
 | Смена уровня / жизни | `CrystalMidlet.java` | `main.c::reload_level_state()`, ветка `player->lives <= 0` | Высокая |
 | Демо-реплей | `d.java`, `b.java` | **Отсутствует** | Высокая |
-| Foreground-проход | `h.java::a(Graphics,K)` (DirectGraphics) | `foreground_pass.c` | Средняя |
+| Foreground-проход | `h.java::a(Graphics,K)` (DirectGraphics) | `foreground_pass.c` | Высокая |
 
 ---
 
@@ -66,22 +66,21 @@
 | Кодирование трансформации | **MATCH** | Java: биты 0–1 = поворот, бит 2 = V-flip, бит 3 = H-flip, lookup `p[]={0,270,180,90,16384,...}`. C: `tile_transform.c:12-33` — бит 3→`SDL_FLIP_HORIZONTAL`, бит 2→`SDL_FLIP_VERTICAL`, биты 0–1→угол `{0,270,180,90}`. |
 | **Применение трансформаций в основном проходе тайлов** | **MISMATCH** | Java: `g.java::a(Graphics)` применяет `Sprite.setTransform()` для каждого тайла. C: `level_renderer.c:74` использует `SDL_RenderCopy()` **без** трансформации — `draw_tile_with_transform()` не вызывается. Все повёрнутые/отражённые тайлы в основном проходе рендерятся без трансформации. |
 | Трансформации в foreground-проходе | **MATCH** | C: `foreground_pass.c:78-82` — проверяет `meta.transform != 0` и вызывает `draw_tile_with_transform()`. |
-| Трансформации в background-проходе | **MISMATCH** | Java: фоновый слой тоже применяет трансформации. C: `bg_layer.c:258` — `SDL_RenderCopy()` без трансформации. |
+| Трансформации в background-проходе | **MATCH** | Java: `g.java` функция `a(...)` содержит строку `k = 0;` (после вычисления transform), которая безусловно обнуляет transform — фоновые тайлы всегда рисуются без трансформации. C: `bg_layer.c:258` — `SDL_RenderCopy()` без трансформации. Поведение совпадает. |
 
 > **MISMATCH 3.3a — Основной проход тайлов без трансформаций**  
 > **Природа:** `level_renderer.c:74` — `SDL_RenderCopy(r, tex, NULL, &dest)` вместо `draw_tile_with_transform(r, tex, &dest, meta.transform)`.  
 > **Сценарий:** Любой тайл с `transform != 0`, не входящий в foreground-набор (52–61, 66–72), рендерится без поворота/отражения.  
 > **Не в пределах исключений** (не HUD/камера/меню).
 
-> **MISMATCH 3.3b — Фоновый слой без трансформаций**  
-> **Природа:** `bg_layer.c:258` — аналогично, фоновые тайлы не трансформируются.  
-> **Сценарий:** Фоновые тайлы с ненулевой трансформацией рендерятся неправильно.
+> **MATCH 3.3b — Фоновый слой без трансформаций**  
+> **Доказательство:** `g.java::a(int,int,int,boolean,int)` — после строки `k = (paramInt4 == 0) ? this.b[i] : paramInt4;` следует `k = 0;`, безусловно обнуляя transform. Java не применяет трансформации к фоновым тайлам. C-порт совпадает.
 
 ### 3.4 Порядок рендера
 
 | Проверка | Результат | Доказательство |
 |---|---|---|
-| Общий порядок слоёв | **PARTIAL** | Java `h.java:589-610`: BG → FG tiles → Exit door → Enemies → Player → Hoop overlays → HUD. C `main.c`: BG → Tiles → Enemies → Player → Foreground pass → HUD. Враги теперь рендерятся, но слои exit door sprite и hoop overlays остаются отсутствующими. |
+| Общий порядок слоёв | **PARTIAL** | Java `h.java:589-610`: BG → FG tiles → Exit door → Enemies → Player → Hoop overlays → HUD. C `main.c`: BG → Tiles → Enemies → Player → Foreground pass (hoops) → HUD. Враги и hoop overlays рендерятся. Отсутствует только слой exit door sprite. |
 
 > **RESOLVED 3.4a — Рендер врагов реализован**  
 > **Факт:** В `main.c` вызывается `enemy_renderer_draw(...)`, а `enemy_renderer.c` рисует 3 типа объектов из `level->objects` с текстурами из `/res/ic`.
@@ -91,10 +90,8 @@
 > **Сценарий:** Выходная дверь невидима, хотя логика входа работает.  
 > **Не в пределах исключений.**
 
-> **MISMATCH 3.4c — Отсутствует рендер hoop-оверлеев**  
-> **Природа:** Java `h.java::a(Graphics,K)` рисует кольца с DirectGraphics-трансформациями поверх игрока. C: hoop overlay не рендерится.  
-> **Сценарий:** Анимация искр при сборе колец и декоративные оверлеи не отображаются.  
-> **Не в пределах исключений.**
+> **RESOLVED 3.4c — Рендер hoop-оверлеев реализован**  
+> **Факт:** `foreground_pass.c` — `foreground_pass_build()` сканирует якоря колец (93–103), `foreground_pass_draw()` рисует спрайты из `ic[3..6]` с корректными SDL-трансформациями. Nokia manipulation 8462 (R270ccw→H) = SDL angle=270°CW + flipH (0x09), Nokia 270 (R270ccw) = SDL angle=90°CW (0x03). Визуально подтверждено.
 
 ### 3.5 Цвет фона для водных/флаговых тайлов
 
@@ -351,10 +348,10 @@
 | # | ID | Описание | Файл/строка |
 |---|---|---|---|
 | 3 | MISMATCH 3.4b | Дверь выхода не рендерится (логика есть, спрайт отсутствует) | `main.c` / `exit_door.c` |
-| 4 | MISMATCH 3.4c | Hoop overlay не рендерится | `foreground_pass.c` / основной рендер-пайплайн |
+| 4 | ~~MISMATCH 3.4c~~ **RESOLVED** | Hoop overlay реализован в `foreground_pass.c` | `foreground_pass.c` |
 | 5 | MISMATCH 3.5a | Alpha водных тайлов = 255 вместо 0x7F | `level_renderer.c` |
 | 6 | MISMATCH 3.5b | Фоновый цвет захардкожен (адаптация под современные дисплеи) | `bg_layer.c` |
-| 7 | MISMATCH 3.3b | Трансформации фоновых тайлов не применяются | `bg_layer.c` |
+| 7 | ~~MISMATCH 3.3b~~ **MATCH** | Фоновые тайлы в Java также без трансформаций (`k=0` в `g.java`) | — |
 | 8 | PARTIAL 5.6 | На финальном уровне приложение завершается без отдельной win-сцены | `main.c` |
 | 9 | PARTIAL 5.7 | Нет отдельного Game Over экрана, только логический reset | `main.c` |
 
