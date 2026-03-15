@@ -2,13 +2,10 @@
 
 #include "hud_font.h"
 #include "resource_loader.h"
+#include "game_constants.h"
 
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
-
-#define SCREEN_WIDTH  480
-#define SCREEN_HEIGHT 272
-#define TILE_SIZE     16
 #define SCORE_DIGITS  8
 
 #define HUD_HEIGHT 21
@@ -77,7 +74,6 @@ int hud_init(SDL_Renderer* renderer) {
     if (hud_font_init(renderer) != 0) return -1;
 
     g_ic_container = resource_load("res/ic");
-    if (!g_ic_container) g_ic_container = resource_load("release/res/ic");
     if (!g_ic_container) return 0;
 
     size_t elem_size = 0;
@@ -141,12 +137,6 @@ void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* lif
     if (state->jump_bonus_counter > max_bonus) max_bonus = state->jump_bonus_counter;
 
     if (tileset) {
-        // Fallback ring icon from tileset if /res/ic S[2] is unavailable.
-        const int tiles_per_row = 4;
-        const int ring_index = 1 + 4 * tiles_per_row;
-
-        SDL_Texture* ring_tex = tileset_get(tileset, ring_index);
-
         int remainingRings = state->total_rings - state->num_rings;
         if (remainingRings < 0) remainingRings = 0;
 
@@ -157,13 +147,6 @@ void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* lif
                 int y = hudStartY + 3;
                 SDL_Rect dst = { x, y, g_hud_ring_w, g_hud_ring_h };
                 SDL_RenderCopy(renderer, g_hud_ring_icon, NULL, &dst);
-            }
-        } else if (ring_tex) {
-            for (int i = 0; i < remainingRings; i++) {
-                int x = 12 + i * TILE_SIZE;
-                int y = hudStartY + 3;
-                SDL_Rect dst = { x, y, TILE_SIZE, TILE_SIZE };
-                SDL_RenderCopy(renderer, ring_tex, NULL, &dst);
             }
         }
 

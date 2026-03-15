@@ -66,18 +66,18 @@ static SDL_Texture* create_texture_from_t4(SDL_Renderer* renderer, const texture
     uint32_t* rgba = (uint32_t*)malloc((size_t)px_count * sizeof(uint32_t));
     if (!rgba) return NULL;
 
+    /* SDL_PIXELFORMAT_RGBA8888: bits 31-24=R, 23-16=G, 15-8=B, 7-0=A */
+    const uint32_t px_opaque_white = 0xFFFFFFFFu; /* R=255 G=255 B=255 A=255 */
+    const uint32_t px_transparent  = 0x00000000u; /* fully transparent        */
+
     const uint8_t* packed = (const uint8_t*)src->data;
     for (int i = 0; i < px_count; i += 2) {
         uint8_t b = packed[i >> 1];
         uint8_t idx0 = (uint8_t)(b & 0x0F);
         uint8_t idx1 = (uint8_t)((b >> 4) & 0x0F);
-        // Font atlas pages are binary masks (nibble values 0/1), not 4-bit gradients.
-        // Mapping 1->17 makes glyphs almost invisible on HUD.
-        uint8_t a0 = (idx0 != 0) ? 255 : 0;
-        uint8_t a1 = (idx1 != 0) ? 255 : 0;
-        rgba[i] = ((uint32_t)a0 << 24) | 0x00FFFFFFu;
+        rgba[i] = (idx0 != 0) ? px_opaque_white : px_transparent;
         if (i + 1 < px_count) {
-            rgba[i + 1] = ((uint32_t)a1 << 24) | 0x00FFFFFFu;
+            rgba[i + 1] = (idx1 != 0) ? px_opaque_white : px_transparent;
         }
     }
 

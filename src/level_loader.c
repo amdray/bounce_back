@@ -182,6 +182,9 @@ static int level_runtime_load_tf(Level* level) {
                 resource_free(tf);
                 return 0;
             }
+            // Keep the original Java storage order: bytes are read row-by-row,
+            // but stored as tile_mask[x][y]. Collision intentionally samples the
+            // same data as tile_mask[y][x]; resource data in /res/tf depends on it.
             for (uint8_t y = 0; y < level->tile_h; y++) {
                 for (uint8_t x = 0; x < level->tile_w; x++) {
                     tile_mask[x][y] = ((*p)[0] != 0);
@@ -608,7 +611,9 @@ bool level_test_collision_collect(Level* level,
                             apply_transform_16(level->transform[tile_id], &mask_x, &mask_y);
                         }
                         if (mask_x < 0 || mask_y < 0 || mask_x >= level->tile_w || mask_y >= level->tile_h) continue;
-                        // Java g.java samples tile mask as s[y][x] in collision checks.
+                        // Do not "fix" this to [mask_x][mask_y]: Java collision reads
+                        // the inline mask with transposed indices, and shipped /res/tf
+                        // masks are authored for that runtime behavior.
                         if (!tile_mask[mask_y][mask_x]) continue;
                         if (player_mask) {
                             int local_x = px - rect_x;

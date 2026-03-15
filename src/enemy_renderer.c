@@ -1,11 +1,9 @@
 #include "enemy_renderer.h"
 
 #include "resource_loader.h"
+#include "game_constants.h"
 
 #include <SDL2/SDL_image.h>
-
-#define SCREEN_WIDTH 480
-#define SCREEN_HEIGHT 272
 
 static ResourceContainer* g_ic = NULL;
 static SDL_Texture* g_enemy_tex[4] = {0};
@@ -40,19 +38,22 @@ int enemy_renderer_init(SDL_Renderer* renderer) {
     if (!renderer) return -1;
 
     g_ic = resource_load("res/ic");
-    if (!g_ic) g_ic = resource_load("release/res/ic");
     if (!g_ic) return -1;
 
     for (int i = 0; i < 4; i++) {
         size_t elem_size = 0;
         const uint8_t* elem = resource_get_element(g_ic, 8 + i, &elem_size);
-        if (!elem || elem_size == 0) return -1;
+        if (!elem || elem_size == 0) goto fail;
 
         g_enemy_tex[i] = load_png_from_mem(renderer, elem, elem_size);
-        if (!g_enemy_tex[i]) return -1;
+        if (!g_enemy_tex[i]) goto fail;
     }
 
     return 0;
+
+fail:
+    enemy_renderer_shutdown();
+    return -1;
 }
 
 void enemy_renderer_shutdown(void) {

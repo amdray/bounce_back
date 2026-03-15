@@ -39,7 +39,7 @@
 | HUD | `h.java::a(Graphics)` | `hud.c::hud_render()` | Средняя |
 | Ввод | `h.java::keyPressed/Released` | `input.c::input_update()` | Высокая |
 | Смена уровня / жизни | `CrystalMidlet.java` | `main.c::reload_level_state()`, ветка `player->lives <= 0` | Высокая |
-| Демо-реплей | `d.java`, `b.java` | **Отсутствует** | Высокая |
+| Демо-реплей (Help -> Game Help) | `d.java`, `b.java` | **Отсутствует** | Высокая |
 | Foreground-проход | `h.java::a(Graphics,K)` (DirectGraphics) | `foreground_pass.c` | Высокая |
 
 ---
@@ -285,7 +285,9 @@
 
 | Проверка | Результат | Доказательство |
 |---|---|---|
-| **Demo playback** | **MISMATCH** | Java: `d.java` + `b.java` — читает запись из `/res/r`, воспроизводит тик-по-тику. C: **не реализовано**. |
+| **Demo playback (не часть обычного gameplay loop)** | **MISMATCH** | Java: `d.java` + `b.java` — читает запись из `/res/r`, воспроизводит тик-по-тику, но включается только через отдельный путь `Help -> Game Help` в `CrystalMidlet.java`, а не при обычном старте/прохождении игры. C: **не реализовано**. |
+
+> **Уточнение:** это не обязательная часть стандартного прохождения. Если запускать Java-игру обычным способом и просто играть, demo/replay может ни разу не встретиться, потому что это отдельный help/demo-режим.
 
 ### 5.12 Звуки
 

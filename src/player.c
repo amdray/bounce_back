@@ -5,6 +5,7 @@
 #include "player.h"
 #include "collision.h"
 #include "resource_loader.h"
+#include "sound.h"
 
 #include <SDL2/SDL_image.h>
 #include <stdlib.h>
@@ -94,7 +95,7 @@ static int calculate_bounce_min(Player* p) {
 }
 
 // Change sprite with collision check (a.java:258-326)
-static void player_change_sprite(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks, int sprite_index) {
+static void player_change_sprite(Player* p, Level* level, int sprite_index) {
     if (!p || sprite_index < 0 || sprite_index >= p->sprite_count) return;
     if (sprite_index == p->sprite_index) return;
 
@@ -110,7 +111,7 @@ static void player_change_sprite(Player* p, Level* level, TileMetadata* tile_met
     p->mask_half_h = p->mask_h / 2;
 
     // Check if new size collides (a.java:267-325)
-    bool collides = collision_test(level, tile_meta, masks,
+    bool collides = collision_test(level,
         p->x_pos - p->mask_half_w, p->y_pos - p->mask_half_h,
         p->mask_w, p->mask_h, p->active_mask);
     
@@ -121,13 +122,13 @@ static void player_change_sprite(Player* p, Level* level, TileMetadata* tile_met
         
         // Try horizontal shifts
         for (int dx = 1; dx <= w_delta; dx++) {
-            if (!collision_test(level, tile_meta, masks,
+            if (!collision_test(level,
                                 p->x_pos + dx - p->mask_half_w, p->y_pos - p->mask_half_h,
                                 p->mask_w, p->mask_h, p->active_mask)) {
                 p->x_pos += dx;
                 return;
             }
-            if (!collision_test(level, tile_meta, masks,
+            if (!collision_test(level,
                                 p->x_pos - dx - p->mask_half_w, p->y_pos - p->mask_half_h,
                                 p->mask_w, p->mask_h, p->active_mask)) {
                 p->x_pos -= dx;
@@ -137,13 +138,13 @@ static void player_change_sprite(Player* p, Level* level, TileMetadata* tile_met
         
         // Try vertical shifts
         for (int dy = 1; dy <= h_delta; dy++) {
-            if (!collision_test(level, tile_meta, masks,
+            if (!collision_test(level,
                                 p->x_pos - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
                                 p->mask_w, p->mask_h, p->active_mask)) {
                 p->y_pos += dy;
                 return;
             }
-            if (!collision_test(level, tile_meta, masks,
+            if (!collision_test(level,
                                 p->x_pos - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
                                 p->mask_w, p->mask_h, p->active_mask)) {
                 p->y_pos -= dy;
@@ -154,28 +155,28 @@ static void player_change_sprite(Player* p, Level* level, TileMetadata* tile_met
         // Try diagonal
         for (int dy = 1; dy <= h_delta; dy++) {
             for (int dx = 1; dx <= w_delta; dx++) {
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     p->x_pos + dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
                                     p->mask_w, p->mask_h, p->active_mask)) {
                     p->x_pos += dx;
                     p->y_pos += dy;
                     return;
                 }
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     p->x_pos + dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
                                     p->mask_w, p->mask_h, p->active_mask)) {
                     p->x_pos += dx;
                     p->y_pos -= dy;
                     return;
                 }
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     p->x_pos - dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
                                     p->mask_w, p->mask_h, p->active_mask)) {
                     p->x_pos -= dx;
                     p->y_pos += dy;
                     return;
                 }
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     p->x_pos - dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
                                     p->mask_w, p->mask_h, p->active_mask)) {
                     p->x_pos -= dx;
@@ -207,6 +208,7 @@ static void player_kill(Player* p) {
     if (!p) return;
     // Cheat: god mode prevents death
     if (p->god_mode) return;
+    sound_play(SND_DEATH);
     // Match a.java:k() - trigger death sequence
     p->is_dying = true;
     p->timer_a = 25;    // 25 ticks death animation
@@ -257,21 +259,18 @@ static void player_respawn(Player* p) {
     }
 }
 
-// Forward declarations for animation functions
-static void player_change_sprite(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks, int sprite_index);
-
 // Match a.java:g() - right-side inflation state machine
-static void player_apply_r_state(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks) {
+static void player_apply_r_state(Player* p, Level* level) {
     if (!p) return;
     
     if (p->state_r == 1) {
         // Inflate small -> popped (sprites 20->21->22)
         if (p->timer_a == 2) {
-            player_change_sprite(p, level, tile_meta, masks, 20);
+            player_change_sprite(p, level, 20);
         } else if (p->timer_a == 1) {
-            player_change_sprite(p, level, tile_meta, masks, 21);
+            player_change_sprite(p, level, 21);
         } else if (p->timer_a == 0) {
-            player_change_sprite(p, level, tile_meta, masks, 22);
+            player_change_sprite(p, level, 22);
             p->is_popped = true;
             p->timer_c = 550;  // this.b = 550
             p->state_r = 0;
@@ -281,11 +280,11 @@ static void player_apply_r_state(Player* p, Level* level, TileMetadata* tile_met
     if (p->state_r == 2) {
         // Deflate popped -> small (sprites 21->20->0)
         if (p->timer_a == 2) {
-            player_change_sprite(p, level, tile_meta, masks, 21);
+            player_change_sprite(p, level, 21);
         } else if (p->timer_a == 1) {
-            player_change_sprite(p, level, tile_meta, masks, 20);
+            player_change_sprite(p, level, 20);
         } else if (p->timer_a == 0) {
-            player_change_sprite(p, level, tile_meta, masks, 0);
+            player_change_sprite(p, level, 0);
             p->is_popped = false;
             p->stunned = false;
             p->state_r = 0;
@@ -295,11 +294,11 @@ static void player_apply_r_state(Player* p, Level* level, TileMetadata* tile_met
     if (p->state_r == 3) {
         // Inverted -> small first (sprites 10->9->0), then chain to r=1
         if (p->timer_a == 2) {
-            player_change_sprite(p, level, tile_meta, masks, 10);
+            player_change_sprite(p, level, 10);
         } else if (p->timer_a == 1) {
-            player_change_sprite(p, level, tile_meta, masks, 9);
+            player_change_sprite(p, level, 9);
         } else if (p->timer_a == 0) {
-            player_change_sprite(p, level, tile_meta, masks, 0);
+            player_change_sprite(p, level, 0);
             p->is_inverted = false;
             p->state_r = 1;  // Chain to inflate
             p->timer_a = 3;
@@ -308,17 +307,17 @@ static void player_apply_r_state(Player* p, Level* level, TileMetadata* tile_met
 }
 
 // Match a.java:a() - left-side inflation state machine
-static void player_apply_a_state(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks) {
+static void player_apply_a_state(Player* p, Level* level) {
     if (!p) return;
     
     if (p->state_a == 1) {
         // Inflate small -> inverted (sprites 9->10->11)
         if (p->timer_a == 2) {
-            player_change_sprite(p, level, tile_meta, masks, 9);
+            player_change_sprite(p, level, 9);
         } else if (p->timer_a == 1) {
-            player_change_sprite(p, level, tile_meta, masks, 10);
+            player_change_sprite(p, level, 10);
         } else if (p->timer_a == 0) {
-            player_change_sprite(p, level, tile_meta, masks, 11);
+            player_change_sprite(p, level, 11);
             p->is_inverted = true;
             p->stunned = false;
             p->state_a = 0;
@@ -328,11 +327,11 @@ static void player_apply_a_state(Player* p, Level* level, TileMetadata* tile_met
     if (p->state_a == 2) {
         // Deflate inverted -> small (sprites 10->9->0)
         if (p->timer_a == 2) {
-            player_change_sprite(p, level, tile_meta, masks, 10);
+            player_change_sprite(p, level, 10);
         } else if (p->timer_a == 1) {
-            player_change_sprite(p, level, tile_meta, masks, 9);
+            player_change_sprite(p, level, 9);
         } else if (p->timer_a == 0) {
-            player_change_sprite(p, level, tile_meta, masks, 0);
+            player_change_sprite(p, level, 0);
             p->is_inverted = false;
             p->stunned = false;
             p->state_a = 0;
@@ -345,30 +344,30 @@ static void player_apply_a_state(Player* p, Level* level, TileMetadata* tile_met
 // Frame 1 (A=2): sprite+1 (more squashed)
 // Frame 2 (A=1): sprite-1 (recovering/stretching back)
 // Frame 3 (A=0): return to base sprite (0 or 11)
-static void player_apply_j_state(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks) {
+static void player_apply_j_state(Player* p, Level* level) {
     if (!p) return;
     
     if (p->timer_a == 2) {
         if (p->sprite_index + 1 < p->sprite_count) {
-            player_change_sprite(p, level, tile_meta, masks, p->sprite_index + 1);
+            player_change_sprite(p, level, p->sprite_index + 1);
         }
     } else if (p->timer_a == 1) {
         if (p->sprite_index > 0) {
-            player_change_sprite(p, level, tile_meta, masks, p->sprite_index - 1);
+            player_change_sprite(p, level, p->sprite_index - 1);
         }
     } else if (p->timer_a == 0) {
         // Return to base sprite
-        player_change_sprite(p, level, tile_meta, masks, p->is_inverted ? 11 : 0);
+        player_change_sprite(p, level, p->is_inverted ? 11 : 0);
         p->stunned = false;
     }
 }
 
 // Match a.java:532-536 - squash/stretch animation trigger on impact
-static void player_trigger_squash(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks, int sprite_delta) {
-    if (!p || !level || !tile_meta || !masks) return;
+static void player_trigger_squash(Player* p, Level* level, int sprite_delta) {
+    if (!p || !level) return;
     int target_sprite = p->sprite_index + sprite_delta;
     if (target_sprite >= 0 && target_sprite < p->sprite_count) {
-        player_change_sprite(p, level, tile_meta, masks, target_sprite);
+        player_change_sprite(p, level, target_sprite);
     }
     p->timer_a = 3;
     p->stunned = true;
@@ -413,16 +412,27 @@ static void player_collect_tile(Player* p, Level* level, int tx, int ty, uint8_t
     uint8_t flag = (uint8_t)(old & 0x80);
     switch (tile_id) {
         case 34:
+            sound_play(SND_GEM);
             p->score += 200;
-            // Coin/gem collected
+            {
+                uint8_t prev = level_get_tile(level, p->spawn_tile_x, p->spawn_tile_y);
+                if ((prev & 0x7F) == 35) {
+                    level_set_tile(level, p->spawn_tile_x, p->spawn_tile_y, (uint8_t)(prev & 0x80));
+                }
+            }
+            p->spawn_tile_y = ty;
+            p->spawn_tile_x = tx;
+            p->spawn_is_large = p->is_inverted;
             level_set_tile(level, tx, ty, (uint8_t)(0x23 | flag));
             break;
         case 12:
+            sound_play(SND_GEM);
             p->score += 1000;
             if (p->lives < 5) p->lives++;
             level_set_tile(level, tx, ty, flag);
             break;
         case 30:
+            sound_play(SND_GEM);
             p->score += 2500;
             // Crystal/bonus collected
             level_set_tile(level, tx, ty, flag);
@@ -433,6 +443,7 @@ static void player_collect_tile(Player* p, Level* level, int tx, int ty, uint8_t
         case 98:
         case 101:
         case 102:
+            sound_play(SND_HOOP);
             p->score += 500;
             // Hoop/ring collected - decrement counter (a.java:350-360)
             if (level->hoops_remaining > 0) {
@@ -452,18 +463,21 @@ static void player_special_tile(Player* p, Level* level, int tx, int ty, uint8_t
     if (!p) return;
     switch (tile_id) {
         case 39:
+            sound_play(SND_POWERUP);
             p->gravity_down = false;
             p->has_jump_bonus = false;
             p->has_speed_bonus = true;
             p->timer_b = 450;
             break;
         case 26:
+            sound_play(SND_POWERUP);
             p->gravity_down = false;
             p->has_jump_bonus = true;
             p->has_speed_bonus = false;
             p->timer_b = 450;
             break;
         case 15:
+            sound_play(SND_POWERUP);
             p->gravity_down = true;
             p->has_jump_bonus = false;
             p->has_speed_bonus = false;
@@ -471,18 +485,21 @@ static void player_special_tile(Player* p, Level* level, int tx, int ty, uint8_t
             p->timer_b = 450;
             break;
         case 22:
+            sound_play(SND_INFLATE);
             if (p->is_popped) p->timer_c = 550;
             player_apply_state_c(p);
             player_apply_state_b(p);
             break;
         case 18:
             if (!p->is_inverted && !p->is_popped && p->state_a == 0) {
+                sound_play(SND_JUMP_UP);
                 player_apply_state_c(p);
                 player_apply_state_l(p);
             }
             break;
         case 11:
             if (p->is_inverted && !p->is_popped && p->state_a == 0) {
+                sound_play(SND_JUMP_DOWN);
                 player_apply_state_c(p);
                 player_apply_state_l(p);
             }
@@ -612,6 +629,7 @@ Player* player_create(SDL_Renderer* renderer, int spawn_x_tiles, int spawn_y_til
     p->spawn_is_large = is_large_ball;
     p->is_dying = false;
     p->god_mode = false;
+    p->prev_cheat_pressed = false;
     p->lives = 3;
     p->score = 0;
 
@@ -639,8 +657,8 @@ void player_free(Player* p) {
     free(p);
 }
 
-void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks, Input* input) {
-    if (!p || !level || !tile_meta || !masks) return;
+void player_update(Player* p, Level* level, Input* input) {
+    if (!p || !level) return;
 
     // Handle death sequence (a.java:593-605, 1646-1665)
     if (p->is_dying) {
@@ -674,12 +692,11 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
         if (input->down) p->control_mask |= 0x4;
         if (input->jump) p->control_mask |= 0x8;
         // Cheat: R+L = toggle god mode
-        static bool prev_cheat = false;
         bool cheat_pressed = input->shoulder_l && input->shoulder_r;
-        if (cheat_pressed && !prev_cheat) {
+        if (cheat_pressed && !p->prev_cheat_pressed) {
             p->god_mode = !p->god_mode;
         }
-        prev_cheat = cheat_pressed;
+        p->prev_cheat_pressed = cheat_pressed;
     }
 
     int m = p->x_pos / 16;
@@ -691,9 +708,9 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
 
     if (p->timer_a != 0) {
         p->timer_a--;
-        if (p->state_r != 0) player_apply_r_state(p, level, tile_meta, masks);
-        if (p->state_a != 0) player_apply_a_state(p, level, tile_meta, masks);
-        if (p->stunned && !p->is_popped) player_apply_j_state(p, level, tile_meta, masks);
+        if (p->state_r != 0) player_apply_r_state(p, level);
+        if (p->state_a != 0) player_apply_a_state(p, level);
+        if (p->stunned && !p->is_popped) player_apply_j_state(p, level);
     }
     if (p->timer_b != 0) {
         p->timer_b--;
@@ -766,7 +783,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
 
         CollisionHits hits;
         collision_hits_clear(&hits);
-        bool blocking = collision_test_collect(level, tile_meta, masks,
+        bool blocking = collision_test_collect(level,
                                                rect_x, rect_y, p->mask_w, p->mask_h,
                                                p->active_mask, &hits);
 
@@ -807,6 +824,18 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
             continue;
         }
 
+        // Hostile enemy: kill before tile ordering can interfere.
+        // Tiles adjacent to the enemy rect (e.g. floor under a vertical-bouncing enemy)
+        // end up in hits[] before the enemy (-1,-1) slot and would resolve first.
+        if (p->carrier_object_index >= 0 && p->carrier_object_index < level->objects.count
+                && !p->is_popped) {
+            uint8_t _etype = level->objects.ao[p->carrier_object_index];
+            if (_etype == 0 || _etype == 1) {
+                player_kill(p);
+                break;
+            }
+        }
+
         bool resolved = false;
         for (int h = 0; h < COLLISION_HITS_MAX; h++) {
             int tx = hits.x[h];
@@ -844,7 +873,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
 
             // Match a.java case 94/96: if not aligned for pass-through, try side-shift at the same Y step.
             if (tx >= 0 && ty >= 0 && (hit_id == 94 || hit_id == 96)) {
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     (p->x_pos + 1) - p->mask_half_w,
                                     test_y - p->mask_half_h,
                                     p->mask_w, p->mask_h,
@@ -857,7 +886,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     }
                     continue;
                 }
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     (p->x_pos - 1) - p->mask_half_w,
                                     test_y - p->mask_half_h,
                                     p->mask_w, p->mask_h,
@@ -904,7 +933,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
 
             // Match a.java case 101/102/103/104: handled for both vertical directions.
             if (id_logic == 101 || id_logic == 102 || id_logic == 103 || id_logic == 104) {
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     p->x_pos - p->mask_half_w,
                                     test_y - p->mask_half_h,
                                     p->mask_w, p->mask_h,
@@ -916,7 +945,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     }
                     continue;
                 }
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     (p->x_pos + 1) - p->mask_half_w,
                                     test_y - p->mask_half_h,
                                     p->mask_w, p->mask_h,
@@ -929,7 +958,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     }
                     continue;
                 }
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     (p->x_pos - 1) - p->mask_half_w,
                                     test_y - p->mask_half_h,
                                     p->mask_w, p->mask_h,
@@ -999,7 +1028,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     case 113:
                     case 116:
                         if (bool2) {
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 (p->x_pos - 1) - p->mask_half_w,
                                                 test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
@@ -1010,7 +1039,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:1256-1260 - squash on upward slope collision
                         else if (j <= -40 && !p->stunned) {
-                            player_trigger_squash(p, level, tile_meta, masks, p->gravity_down ? 5 : 7);
+                            player_trigger_squash(p, level, p->gravity_down ? 5 : 7);
                             resolved = true;
                         }
                         else {
@@ -1024,7 +1053,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     case 114:
                     case 115:
                         if (bool2) {
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 (p->x_pos + 1) - p->mask_half_w,
                                                 test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
@@ -1035,7 +1064,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:1278-1282 - squash on upward slope collision
                         else if (j <= -40 && !p->stunned) {
-                            player_trigger_squash(p, level, tile_meta, masks, p->gravity_down ? 7 : 5);
+                            player_trigger_squash(p, level, p->gravity_down ? 7 : 5);
                             resolved = true;
                         }
                         else {
@@ -1075,10 +1104,97 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         resolved = true;
                         break;
-                    case 200:
-                        j = 0;
-                        resolved = true;
+                    case 200: {
+                        int obj = p->carrier_object_index;
+                        if (obj >= 0 && obj < level->objects.count) {
+                            int top = level->objects.f[obj][0] * 16 + level->objects.ag[obj][1];
+                            int left = level->objects.f[obj][1] * 16 + level->objects.ag[obj][0];
+                            int obj_h = (level->objects.ao[obj] == 2) ? 11 : ((level->objects.ao[obj] == 0) ? 32 : 16);
+                            int obj_w = (level->objects.ao[obj] == 2) ? 24 : ((level->objects.ao[obj] == 0) ? 32 : 16);
+                            int sv = level->objects.s[obj][0];
+                            int sh = level->objects.s[obj][1];
+                            if (sh != 0) {
+                                if ((!p->gravity_down && p->y_pos - p->half_height >= top) ||
+                                    (p->gravity_down && p->y_pos + p->half_height <= top + obj_h)) {
+                                    int target_y = p->gravity_down ? (top - p->half_height) : (top + obj_h + p->half_height);
+                                    if (!collision_test(level,
+                                                        p->x_pos - p->mask_half_w,
+                                                        target_y - p->mask_half_h,
+                                                        p->mask_w, p->mask_h,
+                                                        p->active_mask)) {
+                                        p->y_pos = target_y;
+                                        j = 30;
+                                        resolved = true;
+                                    } else if (p->is_popped) {
+                                        if (!obj_processed || !obj_processed[obj]) {
+                                            flip_object_velocity(level, obj);
+                                            if (obj_processed) obj_processed[obj] = true;
+                                        }
+                                        resolved = true;
+                                    } else {
+                                        player_kill(p);
+                                        resolved = true;
+                                    }
+                                } else if (jump_hold) {
+                                    j = calculate_jump_strength(p);
+                                    p->is_grounded = false;
+                                    if (!p->stunned) {
+                                        player_trigger_squash(p, level, 1);
+                                    }
+                                    resolved = true;
+                                } else if (p->is_grounded) {
+                                    int target_y = p->gravity_down ? (top + obj_h + p->half_height) : (top - p->half_height);
+                                    if (!collision_test(level,
+                                                        p->x_pos - p->mask_half_w,
+                                                        target_y - p->mask_half_h,
+                                                        p->mask_w, p->mask_h,
+                                                        p->active_mask)) {
+                                        p->y_pos = target_y;
+                                        y_pixels = 0;
+                                        j = 30;
+                                        resolved = true;
+                                    } else if (p->is_popped) {
+                                        if (!obj_processed || !obj_processed[obj]) {
+                                            flip_object_velocity(level, obj);
+                                            if (obj_processed) obj_processed[obj] = true;
+                                        }
+                                        resolved = true;
+                                    } else {
+                                        player_kill(p);
+                                        resolved = true;
+                                    }
+                                }
+                            } else if (sv != 0) {
+                                int target_x = p->x_pos;
+                                int target_y = p->y_pos;
+                                if (p->x_pos > left + obj_w) target_x = left + obj_w + p->half_width;
+                                else if (p->x_pos < left) target_x = left - p->half_width;
+                                if ((!p->gravity_down && p->y_pos < top) || (p->gravity_down && p->y_pos > top + obj_h)) {
+                                    target_x = p->x_pos;
+                                    target_y = p->gravity_down ? (top + obj_h + p->half_height) : (top - p->half_height);
+                                }
+                                if (!collision_test(level,
+                                                    target_x - p->mask_half_w,
+                                                    target_y - p->mask_half_h,
+                                                    p->mask_w, p->mask_h,
+                                                    p->active_mask)) {
+                                    p->x_pos = target_x;
+                                    p->y_pos = target_y;
+                                    resolved = true;
+                                } else if (p->is_popped) {
+                                    if (!obj_processed || !obj_processed[obj]) {
+                                        flip_object_vertical(level, obj);
+                                        if (obj_processed) obj_processed[obj] = true;
+                                    }
+                                    resolved = true;
+                                } else {
+                                    player_kill(p);
+                                    resolved = true;
+                                }
+                            }
+                        }
                         break;
+                    }
                     case 12:
                     case 30:
                     case 34:
@@ -1092,8 +1208,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     case 26:
                     case 39:
                         player_special_tile(p, level, tx, ty, id_logic);
-                        resolved = true;
-                        break;
+                        /* Java falls through into default collision handling here. */
                     default:
                         if ((id_logic == 7 || id_logic == 8) && p->is_popped) {
                             player_apply_tile_break(level, tx, ty);
@@ -1116,7 +1231,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:919-924 - squash animation on very fast landing (j>=80)
                         if (j >= 80 && !p->stunned) {
-                            player_trigger_squash(p, level, tile_meta, masks, p->gravity_down ? 7 : 5);
+                            player_trigger_squash(p, level, p->gravity_down ? 7 : 5);
                             break;
                         }
                         // a.java:926-942 - bounce state management for medium speed landing
@@ -1143,7 +1258,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         // a.java:944-952 - grounding on slope when no x-speed
                         if (i == 0) {
                             if ((!p->has_grav_bonus || !p->is_inverted) &&
-                                !collision_test(level, tile_meta, masks,
+                                !collision_test(level,
                                                 (p->x_pos - 1) - p->mask_half_w,
                                                 test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
@@ -1174,7 +1289,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:967-972 - squash animation on very fast landing (j>=80)
                         if (j >= 80 && !p->stunned) {
-                            player_trigger_squash(p, level, tile_meta, masks, p->gravity_down ? 5 : 7);
+                            player_trigger_squash(p, level, p->gravity_down ? 5 : 7);
                             break;
                         }
                         // a.java:975-991 - bounce state management (NOTE: j > 30, not j > 40!)
@@ -1201,7 +1316,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         // a.java:993-1001 - grounding on slope when no x-speed
                         if (i == 0) {
                             if ((!p->has_grav_bonus || !p->is_inverted) &&
-                                !collision_test(level, tile_meta, masks,
+                                !collision_test(level,
                                                 (p->x_pos + 1) - p->mask_half_w,
                                                 test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
@@ -1225,14 +1340,14 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         // a.java:1011-1020 - try to slide left or right
                         {
                             int slid = 0;
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 (p->x_pos + 1) - p->mask_half_w,
                                                 test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
                                 p->x_pos += 1;
                                 p->y_pos = test_y;
                                 slid = 1;
-                            } else if (!collision_test(level, tile_meta, masks,
+                            } else if (!collision_test(level,
                                                        (p->x_pos - 1) - p->mask_half_w,
                                                        test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                        p->active_mask)) {
@@ -1247,7 +1362,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:1022-1025 - squash animation on fast landing when can't slide
                         if (j > 40 && !p->stunned) {
-                            player_trigger_squash(p, level, tile_meta, masks, 1);
+                            player_trigger_squash(p, level, 1);
                             k = p->prev_y_speed;
                             break;
                         }
@@ -1291,6 +1406,12 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                             p->bounce_state = 0;
                         }
                         break;
+                    case 201:
+                    case 202:
+                        // a.java: unconditional kill, no bool3 guard
+                        player_kill(p);
+                        resolved = true;
+                        break;
                     case 200: {
                         int obj = p->carrier_object_index;
                         if (obj >= 0 && obj < level->objects.count) {
@@ -1304,7 +1425,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                                 if ((!p->gravity_down && p->y_pos - p->half_height >= top) ||
                                     (p->gravity_down && p->y_pos + p->half_height <= top + obj_h)) {
                                     int target_y = p->gravity_down ? (top - p->half_height) : (top + obj_h + p->half_height);
-                                    if (!collision_test(level, tile_meta, masks,
+                                    if (!collision_test(level,
                                                         p->x_pos - p->mask_half_w,
                                                         target_y - p->mask_half_h,
                                                         p->mask_w, p->mask_h,
@@ -1327,12 +1448,12 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                                     p->is_grounded = false;
                                     // a.java:1105 - squash animation on platform jump
                                     if (!p->stunned) {
-                                        player_trigger_squash(p, level, tile_meta, masks, 1);
+                                        player_trigger_squash(p, level, 1);
                                     }
                                     resolved = true;
                                 } else if (p->is_grounded) {
                                     int target_y = p->gravity_down ? (top + obj_h + p->half_height) : (top - p->half_height);
-                                    if (!collision_test(level, tile_meta, masks,
+                                    if (!collision_test(level,
                                                         p->x_pos - p->mask_half_w,
                                                         target_y - p->mask_half_h,
                                                         p->mask_w, p->mask_h,
@@ -1361,7 +1482,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                                     target_x = p->x_pos;
                                     target_y = p->gravity_down ? (top + obj_h + p->half_height) : (top - p->half_height);
                                 }
-                                if (!collision_test(level, tile_meta, masks,
+                                if (!collision_test(level,
                                                     target_x - p->mask_half_w,
                                                     target_y - p->mask_half_h,
                                                     p->mask_w, p->mask_h,
@@ -1383,6 +1504,29 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         break;
                     }
+                    case 1:
+                    case 62:
+                    case 63:
+                    case 64:
+                    case 65:
+                    case 85:
+                    case 86:
+                    case 87:
+                    case 88:
+                    case 89:
+                    case 90:
+                    case 91:
+                    case 92:
+                        // a.java: toward_surface + spike/enemy tile = kill unless popped
+                        if (p->is_popped) {
+                            p->is_grounded = true;
+                            j = 30;
+                            p->bounce_state = 0;
+                        } else {
+                            player_kill(p);
+                        }
+                        resolved = true;
+                        break;
                     case 7:
                     case 8:
                         if (p->is_popped) player_apply_tile_break(level, tx, ty);
@@ -1401,21 +1545,20 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     case 26:
                     case 39:
                         player_special_tile(p, level, tx, ty, id_logic);
-                        resolved = true;
-                        break;
+                        /* Java falls through into default collision handling here. */
                     default:
                         // a.java:1173-1182 - try to slide left or right
                         k = 0;
                         {
                             int slid = 0;
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 (p->x_pos + 1) - p->mask_half_w,
                                                 test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
                                 p->x_pos += 1;
                                 p->y_pos = test_y;
                                 slid = 1;
-                            } else if (!collision_test(level, tile_meta, masks,
+                            } else if (!collision_test(level,
                                                        (p->x_pos - 1) - p->mask_half_w,
                                                        test_y - p->mask_half_h, p->mask_w, p->mask_h,
                                                        p->active_mask)) {
@@ -1435,7 +1578,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:1189-1190 - squash animation if can't slide
                         if (j > 40 && !p->stunned) {
-                            player_trigger_squash(p, level, tile_meta, masks, 1);
+                            player_trigger_squash(p, level, 1);
                         }
                         // a.java:1191-1192 - bounce calculation
                         if (!p->has_grav_bonus || !p->is_inverted) {
@@ -1467,7 +1610,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         }
                         // a.java:1193-1229 - arrow tiles: try horizontal shift
                         if (id_logic == 84 || id_logic == 108 || id_logic == 83) {
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 (p->x_pos + 1) - p->mask_half_w,
                                                 p->y_pos - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
@@ -1491,7 +1634,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                             }
                             resolved = true;
                         } else if (id_logic == 79 || id_logic == 109 || id_logic == 82) {
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 (p->x_pos - 1) - p->mask_half_w,
                                                 p->y_pos - p->mask_half_h, p->mask_w, p->mask_h,
                                                 p->active_mask)) {
@@ -1565,7 +1708,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
 
         CollisionHits hits;
         collision_hits_clear(&hits);
-        bool blocking = collision_test_collect(level, tile_meta, masks,
+        bool blocking = collision_test_collect(level,
                                                rect_x, rect_y, p->mask_w, p->mask_h,
                                                p->active_mask, &hits);
 
@@ -1604,7 +1747,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
             p->x_pos = test_x;
             if (p->is_grounded && (!p->has_grav_bonus || !p->is_inverted)) {
                 int drop_y = p->gravity_down ? -1 : 1;
-                if (!collision_test(level, tile_meta, masks,
+                if (!collision_test(level,
                                     p->x_pos - p->mask_half_w,
                                     (p->y_pos + drop_y) - p->mask_half_h,
                                     p->mask_w, p->mask_h,
@@ -1616,6 +1759,16 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                 }
             }
             continue;
+        }
+
+        // Hostile enemy: kill before tile ordering can interfere (same fix as vertical loop).
+        if (p->carrier_object_index >= 0 && p->carrier_object_index < level->objects.count
+                && !p->is_popped) {
+            uint8_t _etype = level->objects.ao[p->carrier_object_index];
+            if (_etype == 0 || _etype == 1) {
+                player_kill(p);
+                break;
+            }
         }
 
         bool resolved = false;
@@ -1669,7 +1822,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                 case 113:
                 case 114:
                     if (!p->gravity_down) {
-                        if (!collision_test(level, tile_meta, masks,
+                        if (!collision_test(level,
                                             test_x - p->mask_half_w,
                                             (p->y_pos - 1) - p->mask_half_h,
                                             p->mask_w, p->mask_h, p->active_mask)) {
@@ -1687,7 +1840,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                 case 115:
                 case 116:
                     if (p->gravity_down || (p->has_grav_bonus && p->is_inverted)) {
-                        if (!collision_test(level, tile_meta, masks,
+                        if (!collision_test(level,
                                             test_x - p->mask_half_w,
                                             (p->y_pos + 1) - p->mask_half_h,
                                             p->mask_w, p->mask_h, p->active_mask)) {
@@ -1705,14 +1858,14 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                 case 54:
                 case 55: {
                     int dy = p->gravity_down ? 1 : -1;
-                    if (!collision_test(level, tile_meta, masks,
+                    if (!collision_test(level,
                                         test_x - p->mask_half_w,
                                         (p->y_pos + dy) - p->mask_half_h,
                                         p->mask_w, p->mask_h, p->active_mask)) {
                         p->x_pos = test_x;
                         p->y_pos += dy;
                         resolved = true;
-                    } else if (!collision_test(level, tile_meta, masks,
+                    } else if (!collision_test(level,
                                                test_x - p->mask_half_w,
                                                (p->y_pos - dy) - p->mask_half_h,
                                                p->mask_w, p->mask_h, p->active_mask)) {
@@ -1730,7 +1883,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                 case 98:
                 case 99:
                 case 100:
-                    if (!collision_test(level, tile_meta, masks,
+                    if (!collision_test(level,
                                         test_x - p->mask_half_w, p->y_pos - p->mask_half_h,
                                         p->mask_w, p->mask_h, p->active_mask)) {
                         p->x_pos = test_x;
@@ -1741,7 +1894,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                         resolved = true;
                     } else {
                         int dy = p->gravity_down ? 1 : -1;
-                        if (!collision_test(level, tile_meta, masks,
+                        if (!collision_test(level,
                                             test_x - p->mask_half_w,
                                             (p->y_pos + dy) - p->mask_half_h,
                                             p->mask_w, p->mask_h, p->active_mask)) {
@@ -1778,7 +1931,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                                 }
                             } else {
                                 int target_y = p->gravity_down ? (top - p->half_height) : (top + obj_h + p->half_height + 2);
-                                if (!collision_test(level, tile_meta, masks,
+                                if (!collision_test(level,
                                                     p->x_pos - p->mask_half_w,
                                                     target_y - p->mask_half_h,
                                                     p->mask_w, p->mask_h,
@@ -1809,7 +1962,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                             } else {
                                 centered = true;
                             }
-                            if (!collision_test(level, tile_meta, masks,
+                            if (!collision_test(level,
                                                 target_x - p->mask_half_w,
                                                 target_y - p->mask_half_h,
                                                 p->mask_w, p->mask_h,
@@ -1890,7 +2043,7 @@ void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMa
                     }
                     // a.java:1622-1624 - squash animation on horizontal collision
                     if ((i > 90 || i < -90) && !p->stunned) {
-                        player_trigger_squash(p, level, tile_meta, masks, 3);
+                        player_trigger_squash(p, level, 3);
                     } else if (p->is_grounded && (i > 90 || i < -90)) {
                         i = -i;
                     } else {
@@ -1938,22 +2091,9 @@ void player_render(Player* p, SDL_Renderer* renderer, int camera_x, int camera_y
             frame_offset = 2;
         }
 
-        SDL_Rect clip_rect = { screen_x, screen_y, death_size, death_size };
-        SDL_Rect prev_clip = {0, 0, 0, 0};
-        const SDL_bool had_clip = SDL_RenderIsClipEnabled(renderer);
-        if (had_clip) {
-            SDL_RenderGetClipRect(renderer, &prev_clip);
-        }
-        SDL_RenderSetClipRect(renderer, &clip_rect);
-
-        SDL_Rect dest = { screen_x, screen_y - frame_offset * death_size, death_size, death_size };
-        SDL_RenderCopy(renderer, sprite, NULL, &dest);
-
-        if (had_clip) {
-            SDL_RenderSetClipRect(renderer, &prev_clip);
-        } else {
-            SDL_RenderSetClipRect(renderer, NULL);
-        }
+        SDL_Rect src  = { 0, frame_offset * death_size, death_size, death_size };
+        SDL_Rect dest = { screen_x, screen_y, death_size, death_size };
+        SDL_RenderCopy(renderer, sprite, &src, &dest);
         return;
     }
     
@@ -1968,8 +2108,85 @@ void player_render(Player* p, SDL_Renderer* renderer, int camera_x, int camera_y
         int screen_y = p->y_pos - p->half_height - camera_y;
         
         SDL_Rect dest = { screen_x, screen_y, p->sprite_width, p->sprite_height };
-        
-        SDL_RendererFlip flip = p->is_inverted ? SDL_FLIP_VERTICAL : SDL_FLIP_NONE;
-        SDL_RenderCopyEx(renderer, sprite, NULL, &dest, 0.0, NULL, flip);
+        SDL_RenderCopy(renderer, sprite, NULL, &dest);
     }
+}
+
+void player_export_state(const Player* p, PlayerSaveState* out_state) {
+    if (!p || !out_state) return;
+
+    out_state->x_pos = p->x_pos;
+    out_state->y_pos = p->y_pos;
+    out_state->x_speed = p->x_speed;
+    out_state->y_speed = p->y_speed;
+    out_state->prev_y_speed = p->prev_y_speed;
+    out_state->sprite_index = p->sprite_index;
+    out_state->is_large = p->is_large;
+    out_state->is_inverted = p->is_inverted;
+    out_state->is_popped = p->is_popped;
+    out_state->gravity_down = p->gravity_down;
+    out_state->is_grounded = p->is_grounded;
+    out_state->has_speed_bonus = p->has_speed_bonus;
+    out_state->has_jump_bonus = p->has_jump_bonus;
+    out_state->has_grav_bonus = p->has_grav_bonus;
+    out_state->stunned = p->stunned;
+    out_state->control_mask = p->control_mask;
+    out_state->bounce_state = p->bounce_state;
+    out_state->timer_a = p->timer_a;
+    out_state->timer_b = p->timer_b;
+    out_state->timer_c = p->timer_c;
+    out_state->state_r = p->state_r;
+    out_state->state_a = p->state_a;
+    out_state->carrier_object_index = p->carrier_object_index;
+    out_state->is_dying = p->is_dying;
+    out_state->spawn_tile_x = p->spawn_tile_x;
+    out_state->spawn_tile_y = p->spawn_tile_y;
+    out_state->spawn_is_large = p->spawn_is_large;
+    out_state->god_mode = p->god_mode;
+    out_state->lives = p->lives;
+    out_state->score = p->score;
+}
+
+bool player_import_state(Player* p, const PlayerSaveState* state) {
+    if (!p || !state) return false;
+    if (state->sprite_index < 0 || state->sprite_index >= p->sprite_count) return false;
+    if (!p->ball_sprites || !p->ball_sprites[state->sprite_index]) return false;
+
+    p->x_pos = state->x_pos;
+    p->y_pos = state->y_pos;
+    p->x_speed = state->x_speed;
+    p->y_speed = state->y_speed;
+    p->prev_y_speed = state->prev_y_speed;
+    p->sprite_index = state->sprite_index;
+    p->is_large = state->is_large;
+    p->is_inverted = state->is_inverted;
+    p->is_popped = state->is_popped;
+    p->gravity_down = state->gravity_down;
+    p->is_grounded = state->is_grounded;
+    p->has_speed_bonus = state->has_speed_bonus;
+    p->has_jump_bonus = state->has_jump_bonus;
+    p->has_grav_bonus = state->has_grav_bonus;
+    p->stunned = state->stunned;
+    p->control_mask = state->control_mask;
+    p->bounce_state = state->bounce_state;
+    p->timer_a = state->timer_a;
+    p->timer_b = state->timer_b;
+    p->timer_c = state->timer_c;
+    p->state_r = state->state_r;
+    p->state_a = state->state_a;
+    p->carrier_object_index = state->carrier_object_index;
+    p->is_dying = state->is_dying;
+    p->spawn_tile_x = state->spawn_tile_x;
+    p->spawn_tile_y = state->spawn_tile_y;
+    p->spawn_is_large = state->spawn_is_large;
+    p->god_mode = state->god_mode;
+    p->lives = state->lives;
+    p->score = state->score;
+
+    if (!player_refresh_sprite_dims(p)) return false;
+    p->active_mask = player_masks_select(p->masks, p->sprite_index, &p->mask_w, &p->mask_h);
+    if (!p->active_mask || p->mask_w <= 0 || p->mask_h <= 0) return false;
+    p->mask_half_w = p->mask_w / 2;
+    p->mask_half_h = p->mask_h / 2;
+    return true;
 }

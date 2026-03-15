@@ -11,11 +11,9 @@
 #include <SDL2/SDL.h>
 #include <stdbool.h>
 
-#include "collision_masks.h"
 #include "input.h"
 #include "level_loader.h"
 #include "player_masks.h"
-#include "tile_metadata.h"
 
 // Jumps (a.java:543-568)
 #define JUMP_NORMAL    -125
@@ -75,6 +73,7 @@ typedef struct {
     int spawn_tile_y;         // this.n - spawn checkpoint Y
     bool spawn_is_large;      // original is_large at spawn
     bool god_mode;            // Cheat: invincibility (R+L)
+    bool prev_cheat_pressed;  // Edge-state for L+R god mode toggle
     int lives;                // CrystalMidlet.h analog for HUD
     int score;                // Score counter for HUD
 
@@ -91,9 +90,44 @@ typedef struct {
     const bool* active_mask;
 } Player;
 
+typedef struct {
+    int x_pos;
+    int y_pos;
+    int x_speed;
+    int y_speed;
+    int prev_y_speed;
+    int sprite_index;
+    bool is_large;
+    bool is_inverted;
+    bool is_popped;
+    bool gravity_down;
+    bool is_grounded;
+    bool has_speed_bonus;
+    bool has_jump_bonus;
+    bool has_grav_bonus;
+    bool stunned;
+    int control_mask;
+    int bounce_state;
+    int timer_a;
+    int timer_b;
+    int timer_c;
+    int state_r;
+    int state_a;
+    int carrier_object_index;
+    bool is_dying;
+    int spawn_tile_x;
+    int spawn_tile_y;
+    bool spawn_is_large;
+    bool god_mode;
+    int lives;
+    int score;
+} PlayerSaveState;
+
 Player* player_create(SDL_Renderer* renderer, int spawn_x_tiles, int spawn_y_tiles, bool is_large_ball);
 void player_free(Player* p);
-void player_update(Player* p, Level* level, TileMetadata* tile_meta, CollisionMasks* masks, Input* input);
+void player_update(Player* p, Level* level, Input* input);
 void player_render(Player* p, SDL_Renderer* renderer, int camera_x, int camera_y);
+void player_export_state(const Player* p, PlayerSaveState* out_state);
+bool player_import_state(Player* p, const PlayerSaveState* state);
 
 #endif // PLAYER_H

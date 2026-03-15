@@ -3,13 +3,10 @@
  */
 
 #include "level_renderer.h"
+#include "game_constants.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#define SCREEN_WIDTH  480
-#define SCREEN_HEIGHT 272
-#define TILE_SIZE     16
 
 LevelRenderer* renderer_create(Level* level, TileMetadata* meta, TileAnimation* tile_anim, Tileset* tileset) {
     if (!level || !meta || !tile_anim || !tileset) return NULL;

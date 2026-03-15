@@ -1,0 +1,8 @@
+#ifndef GAME_CONSTANTS_H
+#define GAME_CONSTANTS_H
+
+#define SCREEN_WIDTH 480
+#define SCREEN_HEIGHT 272
+#define TILE_SIZE 16
+
+#endif // GAME_CONSTANTS_H

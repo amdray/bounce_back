@@ -44,6 +44,5 @@ typedef struct {
 
 const FontAtlas* font_atlas_get(int font_height);
 const FontGlyph* font_atlas_lookup(const FontAtlas* atlas, u32 codepoint);
-void font_atlas_prepare(void);
 
 #endif

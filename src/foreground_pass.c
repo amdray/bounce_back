@@ -18,25 +18,28 @@ int foreground_pass_init(SDL_Renderer* renderer) {
     if (!renderer) return -1;
 
     g_hoop_ic = resource_load("res/ic");
-    if (!g_hoop_ic) g_hoop_ic = resource_load("release/res/ic");
     if (!g_hoop_ic) return -1;
 
     for (int i = 0; i < 4; i++) {
         size_t sz = 0;
         const uint8_t* data = resource_get_element(g_hoop_ic, 3 + i, &sz);
-        if (!data || sz == 0) return -1;
+        if (!data || sz == 0) goto fail;
 
         SDL_RWops* rw = SDL_RWFromConstMem(data, (int)sz);
-        if (!rw) return -1;
+        if (!rw) goto fail;
 
         SDL_Surface* surf = IMG_Load_RW(rw, 1);
-        if (!surf) return -1;
+        if (!surf) goto fail;
 
         g_hoop_tex[i] = SDL_CreateTextureFromSurface(renderer, surf);
         SDL_FreeSurface(surf);
-        if (!g_hoop_tex[i]) return -1;
+        if (!g_hoop_tex[i]) goto fail;
     }
     return 0;
+
+fail:
+    foreground_pass_shutdown();
+    return -1;
 }
 
 void foreground_pass_shutdown(void) {
@@ -155,10 +158,11 @@ void foreground_pass_draw(SDL_Renderer* renderer,
                 SDL_RenderCopy(renderer, htex, NULL, &dest);
                 break;
             case 94: case 96:
-                /* drawImage(x[0/1], sx-1, sy, 20, 270) — rot270, 16x18 */
+                /* drawImage(x[0/1], sx-1, sy, 20, 270) — Nokia 270 => SDL 90cw */
+                /* Rotating 16x18 produces an 18x16 footprint. */
                 htex = g_hoop_tex[(tid == 94) ? 0 : 1];
-                dest = (SDL_Rect){ sx - 1, sy, 16, 18 };
-                draw_tile_with_transform(renderer, htex, &dest, 0x01);
+                dest = (SDL_Rect){ sx - 1, sy, 18, 16 };
+                draw_tile_with_transform(renderer, htex, &dest, 0x03);
                 break;
             case 97: case 99:
                 /* top half:    drawImage(x[2/3], sx, sy,    20, 8192)  — flipX */

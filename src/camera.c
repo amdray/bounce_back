@@ -47,8 +47,12 @@ void camera_update(Camera* cam, int player_x, int player_y, int level_width, int
     // Horizontal: center on player + clamp
     int cameraX = player_x - SCREEN_WIDTH / 2;
     int maxCameraX = level_px_w - SCREEN_WIDTH;
-    if (cameraX < 0) cameraX = 0;
-    if (cameraX > maxCameraX && maxCameraX > 0) cameraX = maxCameraX;
+    if (maxCameraX <= 0) {
+        cameraX = 0;
+    } else {
+        if (cameraX < 0) cameraX = 0;
+        if (cameraX > maxCameraX) cameraX = maxCameraX;
+    }
     cam->x = cameraX;
 
     // Vertical: small levels centered (no movement)

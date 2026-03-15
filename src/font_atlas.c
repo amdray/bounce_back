@@ -32,13 +32,3 @@ const FontGlyph* font_atlas_lookup(const FontAtlas* atlas, u32 codepoint) {
     }
     return g;
 }
-
-static void writeback_atlas(const FontAtlas* atlas) {
-    (void)atlas;
-}
-
-void font_atlas_prepare(void) {
-    writeback_atlas(font9_get_atlas());
-    writeback_atlas(font12_get_atlas());
-    writeback_atlas(font23_get_atlas());
-}

@@ -1,5 +1,5 @@
 /**
- * Foreground overlay pass (front tiles only).
+ * Foreground overlay pass (front tiles + hoop anchors).
  */
 
 #ifndef FOREGROUND_PASS_H
@@ -21,7 +21,12 @@ typedef struct {
 typedef struct {
     TileCoord* front_tiles;
     int front_count;
+    TileCoord hoop_tiles[128]; /* static array — no malloc, max 128 hoop anchors */
+    int hoop_count;
 } ForegroundPass;
+
+int foreground_pass_init(SDL_Renderer* renderer);
+void foreground_pass_shutdown(void);
 
 int foreground_pass_build(const Level* level, ForegroundPass* out);
 
