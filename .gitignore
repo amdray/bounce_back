@@ -39,3 +39,4 @@ PARAM.SFO
 
 # Keep original resources in one place (local only)
 src/res/
+original_code/
