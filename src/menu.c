@@ -39,14 +39,15 @@
 #define IM_ARROW   4   /* 16x16    E — drawImage(E,160,21) + V-flip (160,172) */
 #define IM_COUNT   5
 
-/* ── pixel-perfect active-area origin: centre 176×208 in 480×272 ─────────── */
-/* MENU_OX = (480-176)/2 = 152,  MENU_OY = (272-208)/2 = 32                  */
+/* ── active-area origin: keep X centered, pin menu Y to the top edge ─────── */
 #define MENU_OX  ((SCREEN_W - 176) / 2)
-#define MENU_OY  ((SCREEN_H - 208) / 2)
+#define MENU_OY  0
+#define SPLASH_OY ((SCREEN_H - 208) / 2)
 
 /* ── item layout from i.java: Y=30, step=18, centre x=88 in 176px ─────────  */
 /*   drawString(z[i], 88, 30+i*18, TOP|HCENTER) → cx = MENU_OX+88 = 240      */
 #define ITEM_COUNT 6
+#define LEVEL_SELECT_VISIBLE_ROWS 12
 /* selection bar: fillRect(18, k[i]-3, 139, 18)                               */
 #define SEL_X_OFF  18
 #define SEL_W      139
@@ -110,8 +111,8 @@ static ResourceContainer* s_rc;
 
 static void draw_second_splash_gradient(SDL_Renderer* renderer) {
     /* Central 208 rows are exact 1:1 from source; outside rows use edge colors. */
-    const int y0 = MENU_OY;
-    const int y1 = MENU_OY + 208;
+    const int y0 = SPLASH_OY;
+    const int y1 = SPLASH_OY + 208;
 
     SDL_SetRenderDrawColor(renderer,
                            k_second_splash_grad_208[0][0],
@@ -277,7 +278,7 @@ void menu_render_startup_splash(SDL_Renderer* renderer, int phase) {
             SDL_QueryTexture(s_tex[IM_BLOB], NULL, NULL, &w, &h);
             SDL_Rect dst = {
                 MENU_OX + 88 - w / 2,
-                MENU_OY + 104 - h / 2,
+                SPLASH_OY + 104 - h / 2,
                 w,
                 h
             };
@@ -289,7 +290,7 @@ void menu_render_startup_splash(SDL_Renderer* renderer, int phase) {
     draw_second_splash_gradient(renderer);
 
     if (s_tex[IM_SPLASH]) {
-        SDL_Rect dst = { MENU_OX, MENU_OY, 176, 208 };
+        SDL_Rect dst = { MENU_OX, SPLASH_OY, 176, 208 };
         SDL_RenderCopy(renderer, s_tex[IM_SPLASH], NULL, &dst);
     }
 }
@@ -311,9 +312,9 @@ static void draw_menu_bg(SDL_Renderer* r) {
     SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
     SDL_RenderFillRect(r, &(SDL_Rect){ 0, 0, SCREEN_W, SCREEN_H });
 
-    /* content area fill below decorative header */
+    /* Extend the menu background color to the bottom of the screen. */
     SDL_SetRenderDrawColor(r, 0, 114, 238, 255);
-    SDL_RenderFillRect(r, &(SDL_Rect){ 0, MENU_OY, SCREEN_W, 208 });
+    SDL_RenderFillRect(r, &(SDL_Rect){ 0, MENU_OY, SCREEN_W, SCREEN_H - MENU_OY });
 
     /* im[2] = C header bar (176x21): split into halves and bridge them with a
        1px center slice stretched across the middle, preserving the white bottom line. */
@@ -342,14 +343,16 @@ static void draw_menu_bg(SDL_Renderer* r) {
                          0.0, NULL, SDL_FLIP_HORIZONTAL);
     }
 
-    /* im[4] = E (16×16): top arrow at original relative pos, bottom V-flipped */
-    if (s_tex[IM_ARROW]) {
-        SDL_Rect dst_t = { MENU_OX + 160, MENU_OY + 21,  16, 16 };
-        SDL_Rect dst_b = { MENU_OX + 160, MENU_OY + 172, 16, 16 };
-        SDL_RenderCopy(r, s_tex[IM_ARROW], NULL, &dst_t);
-        SDL_RenderCopyEx(r, s_tex[IM_ARROW], NULL, &dst_b,
-                         0.0, NULL, SDL_FLIP_VERTICAL);
-    }
+}
+
+static void draw_scroll_arrows(SDL_Renderer* r) {
+    if (!r || !s_tex[IM_ARROW]) return;
+
+    SDL_Rect dst_t = { MENU_OX + 160, MENU_OY + 21, 16, 16 };
+    SDL_Rect dst_b = { MENU_OX + 160, MENU_OY + 172, 16, 16 };
+    SDL_RenderCopy(r, s_tex[IM_ARROW], NULL, &dst_t);
+    SDL_RenderCopyEx(r, s_tex[IM_ARROW], NULL, &dst_b,
+                     0.0, NULL, SDL_FLIP_VERTICAL);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -474,7 +477,7 @@ void menu_render_main(SDL_Renderer* renderer, const MenuMainState* ms) {
     }
 
     /* ── bottom hint ─────────────────────────────────────────── */
-    draw_centered(renderer, cx, MENU_OY + 208 - FONT_SMALL - 4,
+    draw_centered(renderer, cx, SCREEN_H - FONT_SMALL - 4,
                   "Up/Down = Navigate    X = Select    Start = Resume",
                   s_col_hint, FONT_SMALL);
 }
@@ -498,13 +501,15 @@ AppState menu_update_level_select(MenuLevelSelectState* ls, const Input* inp) {
 
     if (ls->selection < ls->top_index) {
         ls->top_index = ls->selection;
-    } else if (ls->selection >= ls->top_index + 9) {
-        ls->top_index = ls->selection - 8;
+    } else if (ls->selection >= ls->top_index + LEVEL_SELECT_VISIBLE_ROWS) {
+        ls->top_index = ls->selection - (LEVEL_SELECT_VISIBLE_ROWS - 1);
     }
 
     if (ls->top_index < 0) ls->top_index = 0;
-    if (ls->top_index > ls->level_count - 9) {
-        ls->top_index = (ls->level_count > 9) ? (ls->level_count - 9) : 0;
+    if (ls->top_index > ls->level_count - LEVEL_SELECT_VISIBLE_ROWS) {
+        ls->top_index = (ls->level_count > LEVEL_SELECT_VISIBLE_ROWS)
+                      ? (ls->level_count - LEVEL_SELECT_VISIBLE_ROWS)
+                      : 0;
     }
 
     if (inp->confirm_pressed) {
@@ -518,10 +523,13 @@ void menu_render_level_select(SDL_Renderer* renderer, const MenuLevelSelectState
     if (!renderer || !ls || ls->level_count <= 0) return;
 
     draw_menu_bg(renderer);
+    if (ls->level_count > LEVEL_SELECT_VISIBLE_ROWS) {
+        draw_scroll_arrows(renderer);
+    }
 
     draw_centered(renderer, MENU_OX + 88, MENU_OY + 2, "New Game", s_col_white, FONT_BODY);
 
-    for (int row = 0; row < 9; row++) {
+    for (int row = 0; row < LEVEL_SELECT_VISIBLE_ROWS; row++) {
         int index = ls->top_index + row;
         if (index >= ls->level_count) break;
 
@@ -537,7 +545,7 @@ void menu_render_level_select(SDL_Renderer* renderer, const MenuLevelSelectState
         }
     }
 
-    draw_centered(renderer, MENU_OX + 88, MENU_OY + 208 - FONT_SMALL - 4,
+    draw_centered(renderer, MENU_OX + 88, SCREEN_H - FONT_SMALL - 4,
                   "Up/Down = Navigate    X = Select    O = Back",
                   s_col_hint, FONT_SMALL);
 }

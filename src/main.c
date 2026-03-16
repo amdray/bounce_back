@@ -10,6 +10,7 @@
 #include "bg_layer.h"
 #include "camera.h"
 #include "enemy_renderer.h"
+#include "game_assets.h"
 #include "input.h"
 #include "level_loader.h"
 #include "level_renderer.h"
@@ -24,11 +25,9 @@
 #include "save.h"
 #include "sound.h"
 #include "game_constants.h"
-#define DEFAULT_LEVEL_INDEX 0
-#define REGULAR_LEVEL_COUNT 20
-#define CAMPAIGN_LEVEL_COUNT 21
-#define HIDDEN_LEVEL_INDEX 20
-#define SPLASH_PHASE_MS 3750u
+#include "debug_log.h"
+
+FILE* g_debug_log = NULL;
 
 static int clamp_campaign_level_count(int unlocked_level) {
     if (unlocked_level <= 0) {
@@ -75,9 +74,14 @@ static void present_loading_splash_for(SDL_Renderer* renderer, int phase, uint32
 
     uint32_t start = SDL_GetTicks();
     SDL_Event event;
+    Input input = {0};
     while (SDL_GetTicks() - start < duration_ms) {
         while (SDL_PollEvent(&event)) {
             /* Keep the window responsive during splash presentation. */
+        }
+        input_update(&input);
+        if (input.jump || input.confirm_pressed || input.start_pressed) {
+            break;
         }
         present_loading_splash(renderer, phase);
         SDL_Delay(16);
@@ -278,6 +282,7 @@ int main(int argc, char *argv[]) {
     bool bootstrap_complete = false;
 
     FILE* log = fopen("debug.log", "w");
+    g_debug_log = log;
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     Level* level = NULL;
@@ -288,6 +293,7 @@ int main(int argc, char *argv[]) {
     BgLayer* bg_layer = NULL;
     LevelRenderer* level_renderer = NULL;
     Player* player = NULL;
+    GameAssets assets = {0};
 
     int level_index = DEFAULT_LEVEL_INDEX;
     SDL_Event event;
@@ -355,6 +361,8 @@ int main(int argc, char *argv[]) {
     log_stage_time(log, "SDL_CreateRenderer", t0, t1);
     if (log) fprintf(log, "Renderer OK\n");
 
+    input_init();
+
     t0 = SDL_GetPerformanceCounter();
     menu_init(renderer);
     t1 = SDL_GetPerformanceCounter();
@@ -370,6 +378,17 @@ int main(int argc, char *argv[]) {
     sound_play(SND_MENU_SPLASH);
     present_loading_splash(renderer, 1);
 
+    t0 = SDL_GetPerformanceCounter();
+    if (game_assets_init(&assets, renderer, log) != 0) {
+        t1 = SDL_GetPerformanceCounter();
+        log_stage_time(log, "game_assets_init", t0, t1);
+        if (log) fprintf(log, "Failed to load shared assets (res/ic)\n");
+        goto cleanup;
+    }
+    t1 = SDL_GetPerformanceCounter();
+    log_stage_time(log, "game_assets_init", t0, t1);
+
+    present_loading_splash(renderer, 1);
     t0 = SDL_GetPerformanceCounter();
     level = level_load("res/lf", level_index);
     t1 = SDL_GetPerformanceCounter();
@@ -461,7 +480,7 @@ int main(int argc, char *argv[]) {
 
     present_loading_splash(renderer, 1);
     t0 = SDL_GetPerformanceCounter();
-    if (hud_init(renderer) != 0) {
+    if (hud_init(renderer, &assets.ic) != 0) {
         t1 = SDL_GetPerformanceCounter();
         log_stage_time(log, "hud_init", t0, t1);
         if (log) fprintf(log, "Failed to init HUD\n");
@@ -472,18 +491,18 @@ int main(int argc, char *argv[]) {
 
     present_loading_splash(renderer, 1);
     t0 = SDL_GetPerformanceCounter();
-    if (enemy_renderer_init(renderer) != 0) {
+    if (object_renderer_init(&assets.ic) != 0) {
         t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "enemy_renderer_init", t0, t1);
-        if (log) fprintf(log, "Failed to init enemy renderer\n");
+        log_stage_time(log, "object_renderer_init", t0, t1);
+        if (log) fprintf(log, "Failed to init object renderer\n");
         goto cleanup;
     }
     t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "enemy_renderer_init", t0, t1);
+    log_stage_time(log, "object_renderer_init", t0, t1);
 
     present_loading_splash(renderer, 1);
     t0 = SDL_GetPerformanceCounter();
-    if (exit_door_renderer_init(renderer) != 0) {
+    if (exit_door_renderer_init(&assets.ic) != 0) {
         t1 = SDL_GetPerformanceCounter();
         log_stage_time(log, "exit_door_renderer_init", t0, t1);
         if (log) fprintf(log, "Failed to init exit door renderer\n");
@@ -494,7 +513,7 @@ int main(int argc, char *argv[]) {
 
     present_loading_splash(renderer, 1);
     t0 = SDL_GetPerformanceCounter();
-    if (foreground_pass_init(renderer) != 0) {
+    if (foreground_pass_init(&assets.ic) != 0) {
         t1 = SDL_GetPerformanceCounter();
         log_stage_time(log, "foreground_pass_init", t0, t1);
         if (log) fprintf(log, "Failed to init foreground pass\n");
@@ -503,12 +522,19 @@ int main(int argc, char *argv[]) {
     t1 = SDL_GetPerformanceCounter();
     log_stage_time(log, "foreground_pass_init", t0, t1);
 
+    Input splash_input = {0};
     while (SDL_GetTicks() - splash_phase2_start < SPLASH_PHASE_MS) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            /* Keep the window responsive during splash presentation. */
+        }
+        input_update(&splash_input);
+        if (splash_input.jump || splash_input.confirm_pressed || splash_input.start_pressed) {
+            break;
+        }
         present_loading_splash(renderer, 1);
         SDL_Delay(16);
     }
-
-    input_init();
     if (log) fprintf(log, "[load] startup.total: %.3f s\n", elapsed_seconds(startup_t0, SDL_GetPerformanceCounter()));
     camera_init(&camera);
     camera_reset(&camera, level->width, level->height);
@@ -714,8 +740,6 @@ int main(int argc, char *argv[]) {
         }
 
         if (log) {
-            if (input.right && !input.left) fprintf(log, "xSpeed=%d\n", ACCEL_NORMAL);
-            if (input.left && !input.right) fprintf(log, "xSpeed=%d\n", -ACCEL_NORMAL);
             if (input.jump && !input.down && player->is_grounded) {
                 fprintf(log, "jump=%d\n", JUMP_NORMAL);
                 fprintf(log, "ySpeed=%d\n", JUMP_NORMAL);
@@ -727,35 +751,7 @@ int main(int argc, char *argv[]) {
                            player->y_pos - player->half_height - 1,
                            player->x_pos + player->half_width + 1,
                            player->y_pos + player->half_height + 1,
-                           player->is_popped);
-        player_update(player, level, &input);
-
-        /* ── Game Over: lives exhausted ──────────────────── */
-        if (player->lives <= 0) {
-            if (log) fprintf(log, "GAME_OVER\n");
-            overlay = (MenuOverlayData){
-                .level_index = level_index,
-                .lives_done  = levels_done,
-                .total_score = total_score,
-            };
-            save_insert_record(total_score);
-            save_clear_continue();
-            save_flush();
-            menu_main.has_save = save_has_continue();
-            total_score = 0;
-            levels_done = 0;
-            one_go_run = false;
-            /* reset world to level 0 so background is valid */
-            if (reload_level_state(renderer, DEFAULT_LEVEL_INDEX,
-                                   &level_index, &level, &bg_layer, &fg,
-                                   tile_meta, tile_anim, &tileset,
-                                   &level_renderer, &player, &camera, &door, log)) {
-                player->lives = 3;
-                level_start_ticks = SDL_GetTicks();
-            }
-            app_state = APP_STATE_GAME_OVER;
-            continue;
-        }
+                           player->is_stone);
 
         /* ── Exit door ───────────────────────────────────── */
         exit_door_tick(&door, level->hoops_remaining);
@@ -825,6 +821,35 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        player_update(player, level, &input);
+
+        /* ── Game Over: lives exhausted ──────────────────── */
+        if (player->lives <= 0) {
+            if (log) fprintf(log, "GAME_OVER\n");
+            overlay = (MenuOverlayData){
+                .level_index = level_index,
+                .lives_done  = levels_done,
+                .total_score = total_score,
+            };
+            save_insert_record(total_score);
+            save_clear_continue();
+            save_flush();
+            menu_main.has_save = save_has_continue();
+            total_score = 0;
+            levels_done = 0;
+            one_go_run = false;
+            /* reset world to level 0 so background is valid */
+            if (reload_level_state(renderer, DEFAULT_LEVEL_INDEX,
+                                   &level_index, &level, &bg_layer, &fg,
+                                   tile_meta, tile_anim, &tileset,
+                                   &level_renderer, &player, &camera, &door, log)) {
+                player->lives = 3;
+                level_start_ticks = SDL_GetTicks();
+            }
+            app_state = APP_STATE_GAME_OVER;
+            continue;
+        }
+
         /* ── Render game frame ───────────────────────────── */
         camera_update(&camera, player->x_pos, player->y_pos, level->width, level->height);
 
@@ -835,7 +860,7 @@ int main(int argc, char *argv[]) {
         bg_layer_draw(bg_layer, renderer, camera.x >> 1, camera.y >> 1, SCREEN_WIDTH, SCREEN_HEIGHT);
         renderer_draw(level_renderer, renderer, camera.x, camera.y);
         exit_door_render(renderer, &door, level, camera.x, camera.y);
-        enemy_renderer_draw(renderer, level, camera.x, camera.y);
+        object_renderer_draw(renderer, level, camera.x, camera.y);
         player_render(player, renderer, camera.x, camera.y);
         foreground_pass_draw(renderer, level, tile_meta, tile_anim, tileset, &fg, camera.x, camera.y);
         HudState hud = {
@@ -846,6 +871,7 @@ int main(int argc, char *argv[]) {
             .speed_bonus_counter = player->has_speed_bonus ? player->timer_b : 0,
             .grav_bonus_counter = player->has_grav_bonus ? player->timer_b : 0,
             .jump_bonus_counter = player->has_jump_bonus ? player->timer_b : 0,
+            .stone_bonus_counter = player->is_stone ? player->stone_timer : 0,
         };
         SDL_Texture* hud_life_ball_icon = (player && player->ball_sprites && player->sprite_count > 0)
                                         ? player->ball_sprites[0]
@@ -876,8 +902,9 @@ cleanup:
     input_cleanup();
     foreground_pass_shutdown();
     exit_door_renderer_shutdown();
-    enemy_renderer_shutdown();
+    object_renderer_shutdown();
     hud_shutdown();
+    game_assets_shutdown(&assets);
     player_free(player);
     bg_layer_free(bg_layer);
     renderer_free(level_renderer);

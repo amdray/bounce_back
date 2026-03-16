@@ -24,10 +24,10 @@
 
 **Ключевые выводы:**
 - **Критических расхождений нет**: трансформации тайлов в основном проходе не применяются — Java аналогично (`k=0` в `g.java`). Bounce decay на плоских поверхностях — `>>=1` (50%), соответствует Java.
-- **Расхождения** (см. полный список в аудите): неправильный alpha водных тайлов (3.5a), захардкоженный цвет фона (3.5b), отсутствие demo playback help-режима (5.11), отсутствие звука (5.12), минорные: drift тайминга 20 FPS (4.1), фаза tile animation (4.2).
+- **Расхождения** (см. полный список в аудите): неправильный alpha водных тайлов, захардкоженный цвет фона, отсутствие demo playback help-режима, фаза tile animation (update vs render), а также частичная недоведённость аудио parity.
 - **Полное совпадение**: все 12 констант физики, пиксельная коллизия, 3 типа врагов (AI), 6 типов колец, тайловые эффекты, сбор предметов/очки, пружины, конвейеры.
 
-**Рекомендация:** Порт требует значительных исправлений для достижения pixel-perfect соответствия и полной игры.
+**Рекомендация:** Порт уже играбелен, но для более строгого pixel-perfect соответствия стоит закрыть оставшиеся визуальные и lifecycle-расхождения из аудита.
 
 ---
 
@@ -45,7 +45,7 @@
 - ✅ **Метаданные тайлов** (`tile_metadata.c`) из /res/tf
 - ✅ **Анимация тайлов** (`tile_animation.c`) - renderType=3, 50ms tick
 - ✅ **Рендеринг уровней** (`level_renderer.c`) с правильными текстурами
-- ✅ **Система коллизий** (`collision.c`) с масками 16×16
+- ✅ **Система коллизий** (`level_loader.c`, `player_masks.c`) с pixel-level проверкой масок
 - ✅ **Физика игрока** (`player.c`) - гравитация, прыжки, движение
 - ✅ **Ввод** (`input.c`) - gamepad/PSP controller (DPAD, A, shoulder)
 - ✅ **Камера** (`camera.c`) - плавное следование за игроком
@@ -57,6 +57,8 @@
 - ✅ **Выход уровня и прогрессия** (`exit_door.c`, `main.c`) - открытие двери, переход на следующий уровень
 - ✅ **Game Over / Level Complete / Win сцены** (`menu.c`) — отдельные экраны через `menu_render_game_over`, `menu_render_level_complete`, `menu_render_congratulations`
 - ✅ **Главное меню** (`menu.c`) — `menu_render_main`
+- ✅ **Persisted Continue/Save** (`save.c`) — восстановление из `SAVE_CONTINUE_GAME` и `SAVE_CONTINUE_LEVEL_COMPLETE`
+- ✅ **Звук** (`sound.c`) — загрузка и воспроизведение 11 OTT-звуков из `/res/s`
 - ✅ **Таймер уровня** (`main.c`) — real-time таймер через `SDL_GetTicks()` для бонуса за время
 - ✅ **Foreground pass** (`foreground_pass.c`) — отдельный проход для передних слоёв/оверлеев
 - ✅ **Hoop overlay рендер** (`foreground_pass.c`) — рендер колец с Nokia DirectGraphics трансформациями (8462→SDL 0x09, 270→SDL 0x03)
@@ -75,8 +77,8 @@ make
 ### Следующие этапы (НЕ РЕАЛИЗОВАНО)
 
 **Критичные для геймплея:**
-- ❌ Звук и музыка (SFX/BGM)
 - ❌ 60 FPS render loop при сохранении fixed 20 Hz simulation (сейчас общий цикл 20 FPS)
+- ❌ Полная audio parity (качество/поведение menu-splash/gameplay)
 
 **Опционально / вне обычного gameplay loop:**
 - ❌ Demo replay help-режима (`d.java`/`b.java`, `/res/r`): в Java это отдельный путь `Help -> Game Help`, а не обязательная часть обычного прохождения
@@ -84,6 +86,7 @@ make
 **Дополнительно:**
 - Alpha водных тайлов: `level_renderer.c` принудительно 255, нужно 0x7F
 - Цвет фона: `bg_layer.c` захардкожен, нужно читать из заголовка `/res/bg`
+- Фаза tile animation: тикает в render-части, а не в update-части
 
 ### Общая информация
 
@@ -124,8 +127,6 @@ make
 │   ├── tile_animation.[ch]      # Система анимации тайлов (renderType=3, tick 50ms)
 │   ├── level_renderer.[ch]      # Рендеринг уровня (tileMap → экран, анимации)
 │   ├── bg_layer.[ch]            # Фоновый слой
-│   ├── collision.[ch]           # Тесты коллизий (g.collisionTest)
-│   ├── collision_masks.[ch]     # Загрузка и проверка масок коллизий 16×16
 │   ├── player.[ch]              # Физика игрока (гравитация, прыжки, движение)
 │   ├── player_masks.[ch]        # Маски игрока из /res/b для pixel-perfect collision
 │   ├── input.[ch]               # Обработка ввода (влево/вправо/прыжок)
@@ -137,7 +138,8 @@ make
 │   ├── menu.[ch]                # Меню, game over, level complete, congratulations
 │   ├── foreground_pass.[ch]     # Передний слой тайлов (оверлеи/hoops foreground)
 │   ├── tile_transform.[ch]      # Рендер tile transform (rotate/flip)
-│   └── Makefile                 # Сборка для PSPSDK (WSL/Linux)
+│   ├── sound.[ch]               # OTT-аудио (11 SFX из /res/s)
+│   └── save.[ch]                # Persisted continue/save (PSP savedata)
 │
 ├── docs/
 │   ├── DEOBFUSCATION.md             # Справочник по деобфускации: классы/поля/форматы ресурсов
@@ -145,20 +147,19 @@ make
 │   ├── COLLISION_CONTRACT.md        # Контракт коллизий (g.collisionTest): collisionType/transform/aux + кейсы
 │   ├── MEMORY_ANALYSIS.md           # Анализ памяти/VRAM и рекомендации
 │   ├── original-code-review.md      # Заметки по обзору исходников/архитектуры
-│   ├── tile_types_documentation.md  # Документация по типам тайлов и коллизиям
 │   ├── STEP_01_BRING_UP.md          # ✅ Шаг 1: Инициализация SDL2, загрузка ресурсов
 │   ├── STEP_02_TILE_ENGINE.md       # ✅ Шаг 2: Загрузка и рендеринг уровней
 │   ├── STEP_03_PLAYER_PHYSICS.md    # ✅ Шаг 3: Физика игрока
 │   ├── STEP_04_COLLISIONS.md        # ✅ Шаг 4: Система коллизий
 │   ├── STEP_05_INPUT.md             # ✅ Шаг 5: Обработка ввода
 │   ├── STEP_06_CAMERA.md            # ✅ Шаг 6: Камера
-│   └── STEP_07_TILE_ANIMATION.md    # ✅ Шаг 7: Анимация тайлов│   ├── STEP_08_HUD_HOOPS_EXIT.md    # ✅ Шаг 8: HUD, кольца, дверь
+│   ├── STEP_07_TILE_ANIMATION.md    # ✅ Шаг 7: Анимация тайлов
 │   ├── STEP_09_LAYERS_HOOPS_FOREGROUND.md  # ✅ Шаг 9: Foreground pass, hoop overlay
 │   ├── STEP_10_PLAYER_MASKS_RES_B.md       # ✅ Шаг 10: Маски игрока
-│   ├── STEP_11_BIG_HOOPS_COLLISION_TRANSFORMS.md  # ✅ Шаг 11: Большие кольца, трансформации│
+│   ├── STEP_11_BIG_HOOPS_COLLISION_TRANSFORMS.md  # ✅ Шаг 11: Большие кольца, трансформации
+│   └── FIXED_UPDATE_20HZ_RENDER_60HZ_ARCHITECTURE.md # Архитектурная заметка по update/render
 ├── artifacts/
 │   ├── tile_mapping_table.txt                   # Табличное представление свойств тайлов
-│   ├── lf_enemies_dump.txt                      # Сгенерированный текстовый дамп врагов по всем уровням
 │   ├── lf_tile_positions_collision_cases.txt    # Сгенерированные позиции tileId для collision кейсов
 │   ├── tf_tiles_dump.txt                        # Сгенерированный дамп метаданных /res/tf (все тайлы)
 │   ├── tf_inline_masks_runtime.txt              # Сгенерированные inline-маски (runtime-ориентация)
@@ -169,15 +170,19 @@ make
 │   ├── generate_maps_from_lf.py                 # Парсер уровней (res/lf) и сборка карт
 │   ├── parse_tf_textures&animations.py          # Анализ формата тайлов (res/tf), анимаций и флагов
 │   ├── count_tiles_on_levels.py                 # Статистика распределения тайлов по уровням
-│   ├── dump_lf_enemies.py                       # Дамп enemy records из /res/lf (9 байт) + нормализация как в h.b(level)
 │   ├── dump_lf_tile_positions.py                # Поиск tileId по уровням (/res/lf tileMap): позиции и флаг 0x80
 │   ├── dump_tf_tiles.py                         # Дамп /res/tf: v/T/transform/collisionType/aux (+ вывод inline mask)
 │   ├── dump_res_container_signatures.py         # Определение форматов chunk'ов в /res/* (PNG/JPEG/raw), для bring-up
 │   ├── tile_to_texture_mapping.py               # Соответствие ID тайлов и графических ресурсов
+│   ├── extract_all_pngs.py                      # Извлечение PNG-чанков из контейнеров ресурсов
+│   ├── extract_ball_sprites.py                  # Извлечение/проверка спрайтов шара
+│   ├── generate_level_flags_html.py             # Генерация HTML-инспектора флагов уровней
+│   ├── ic_sizes.py                              # Анализ размеров IC-текстур
 │   ├── analyze_memory_requirements.py           # Анализ требований к памяти (PSP)
 │   └── analyze_splash_screens.py                # Анализ заставок/меню/UI (PSP)
 ├── gifs/                        # Визуализация уровней (отладочные GIF)
 ├── release/                     # ✅ Результаты сборки (EBOOT.PBP + res/)
+├── Makefile                     # Сборка для PSPSDK (WSL/Linux)
 └── README.md                    # Текущая документация проекта
 ```
 
@@ -210,8 +215,11 @@ make
 - `scripts/count_tiles_on_levels.py`  
   Сбор статистики использования тайлов по всем уровням.
 
-- [`dump_lf_enemies.py`](scripts/dump_lf_enemies.py)  
-  Дамп “врагов/moving objects” из `/res/lf` (каждый объект — 9 байт), включая нормализацию координат/скоростей как в `h.b(level)`. Нужен, чтобы порт врагов не был гаданием.
+- [`generate_level_flags_html.py`](scripts/generate_level_flags_html.py)  
+  Генерация HTML-инспектора флагов/свойств уровней для быстрой визуальной проверки карт и служебных битов.
+
+- [`ic_sizes.py`](scripts/ic_sizes.py)  
+  Анализ размеров и параметров IC-текстур, используемых для объектов/оверлеев.
 
 - [`dump_lf_tile_positions.py`](scripts/dump_lf_tile_positions.py)  
   Поиск tileId по всем уровням в tileMap (/res/lf): выдаёт позиции (tileX,tileY) и флаг `0x80` (bg-fill). Нужен, чтобы привязывать “тайл X реально встречается вот здесь” в документах/контрактах.
@@ -240,10 +248,6 @@ make
 ## Сгенерированные дампы (чтобы не забыть, откуда “факты”)
 
 Эти файлы — **не ручные заметки**, а воспроизводимые артефакты, сгенерированные из оригинальных ресурсов в `original_code/.../res/*`. Их удобно ссылать в документации, чтобы любые утверждения можно было перепроверить.
-
-- [`lf_enemies_dump.txt`](artifacts/lf_enemies_dump.txt)  
-  Полный дамп врагов по уровням:  
-  `python3 scripts/dump_lf_enemies.py --out artifacts/lf_enemies_dump.txt`
 
 - [`tf_tiles_dump.txt`](artifacts/tf_tiles_dump.txt)  
   Полный дамп метаданных `/res/tf`:  

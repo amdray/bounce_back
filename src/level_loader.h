@@ -44,7 +44,7 @@ typedef struct {
     uint8_t tile_count;     // g.h
     uint8_t* collision_type;// g.l[tileId]
     uint8_t* transform;     // g.b[tileId]
-    bool*** masks;          // g.s[tileId][x][y]
+    bool** masks;           // g.s[tileId] -> flattened mask storage
     int hit_cols[5];        // g.Y
     int hit_rows[5];        // g.P
     bool hits_overflow;
@@ -62,7 +62,7 @@ void level_objects_tick(Level* level,
                         int player_top,
                         int player_right,
                         int player_bottom,
-                        bool player_is_popped);
+                        bool player_is_stone);
 
 bool level_test_collision_collect(Level* level,
                                   int rect_x, int rect_y, int rect_w, int rect_h,

@@ -25,7 +25,9 @@ typedef struct {
     int hoop_count;
 } ForegroundPass;
 
-int foreground_pass_init(SDL_Renderer* renderer);
+#include "game_assets.h"
+
+int foreground_pass_init(const IcAssets* ic);
 void foreground_pass_shutdown(void);
 
 int foreground_pass_build(const Level* level, ForegroundPass* out);

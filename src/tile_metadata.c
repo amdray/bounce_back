@@ -3,6 +3,7 @@
  */
 
 #include "tile_metadata.h"
+#include "endian_utils.h"
 #include "resource_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,14 +19,6 @@ static int require_bytes(const char* ctx, const uint8_t* p, const uint8_t* end, 
         return 0;
     }
     return 1;
-}
-
-static uint32_t read_be32(const uint8_t* p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
-}
-
-static int32_t read_be32_i32(const uint8_t* p) {
-    return (int32_t)read_be32(p);
 }
 
 TileMetadata* tilemetadata_load(const char* tf_path) {
@@ -71,7 +64,7 @@ TileMetadata* tilemetadata_load(const char* tf_path) {
     uint8_t splitIndex = p0[7];
     uint8_t tileIdMask = p0[8];
     uint8_t tileFlagMask = p0[9];
-    uint32_t bgColor = read_be32(p0 + 10);
+    uint32_t bgColor = endian_read_be32_u32(p0 + 10);
     (void)images_total;
     (void)images_base;
     (void)clampX;
@@ -151,7 +144,7 @@ TileMetadata* tilemetadata_load(const char* tf_path) {
             resource_free(tf);
             return NULL;
         }
-        int32_t aux_i32 = read_be32_i32(*p);
+        int32_t aux_i32 = endian_read_be32_i32(*p);
         *p += 4;
 
         meta[tileId].render_type = renderType;

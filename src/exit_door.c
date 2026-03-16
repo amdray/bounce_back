@@ -6,17 +6,14 @@
 
 #include "level_loader.h"
 #include "player.h"
-#include "resource_loader.h"
 #include "game_constants.h"
-
-#include <SDL2/SDL_image.h>
 
 /* ic[7] is 32x96: two halves of 32x24 each, closed and open states */
 #define DOOR_TEX_W   32
 #define DOOR_HALF_H  24
 
-static SDL_Texture*      g_door_tex = NULL;
-static ResourceContainer* g_ic_door  = NULL;
+/* g_door_tex borrowed from IcAssets — NOT owned by exit_door. */
+static SDL_Texture* g_door_tex = NULL;
 
 void exit_door_tick(ExitDoorState* door, int objective_remaining) {
     if (!door) return;
@@ -50,35 +47,15 @@ bool exit_door_test_complete(ExitDoorState* door, Level* level, Player* p) {
 
 /* ── Renderer (h.java::c(Graphics)) ─────────────────────────────────────── */
 
-int exit_door_renderer_init(SDL_Renderer* renderer) {
-    if (!renderer) return -1;
-
-    g_ic_door = resource_load("res/ic");
-    if (!g_ic_door) return -1;
-
-    size_t elem_size = 0;
-    const uint8_t* elem = resource_get_element(g_ic_door, 7, &elem_size);
-    if (!elem || elem_size == 0) goto fail;
-
-    SDL_RWops* rw = SDL_RWFromConstMem(elem, (int)elem_size);
-    if (!rw) goto fail;
-
-    SDL_Surface* surf = IMG_Load_RW(rw, 1);
-    if (!surf) goto fail;
-
-    g_door_tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_FreeSurface(surf);
-    if (!g_door_tex) goto fail;
+int exit_door_renderer_init(const IcAssets* ic) {
+    if (!ic || !ic->door) return -1;
+    g_door_tex = ic->door; /* borrowed, not owned */
     return 0;
-
-fail:
-    exit_door_renderer_shutdown();
-    return -1;
 }
 
 void exit_door_renderer_shutdown(void) {
-    if (g_door_tex) { SDL_DestroyTexture(g_door_tex); g_door_tex = NULL; }
-    if (g_ic_door)  { resource_free(g_ic_door);       g_ic_door  = NULL; }
+    /* Texture owned by GameAssets — only null out the borrowed pointer. */
+    g_door_tex = NULL;
 }
 
 /*

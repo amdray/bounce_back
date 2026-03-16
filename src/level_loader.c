@@ -3,7 +3,10 @@
  */
 
 #include "level_loader.h"
+#include "debug_log.h"
+#include "endian_utils.h"
 #include "resource_loader.h"
+#include "tile_transform.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,17 +29,13 @@ static int require_bytes(const char* ctx, const uint8_t* p, const uint8_t* end, 
     return 1;
 }
 
-static uint32_t read_be32(const uint8_t* p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
-}
-
 static int clamp_0_to_max(int value, int max_exclusive) {
     if (value < 0) return 0;
     if (value >= max_exclusive) return max_exclusive - 1;
     return value;
 }
 
-static int ptr_seen(bool*** seen, size_t seen_count, bool** ptr) {
+static int ptr_seen(bool** seen, size_t seen_count, bool* ptr) {
     for (size_t i = 0; i < seen_count; i++) {
         if (seen[i] == ptr) return 1;
     }
@@ -56,19 +55,16 @@ static void level_objects_free(Level* level) {
 static void level_runtime_masks_free(Level* level) {
     if (!level) return;
     if (level->masks) {
-        bool*** seen = NULL;
+        bool** seen = NULL;
         size_t seen_count = 0;
         if (level->tile_count > 0) {
-            seen = (bool***)calloc(level->tile_count, sizeof(bool**));
+            seen = (bool**)calloc(level->tile_count, sizeof(bool*));
         }
         for (uint8_t tid = 0; tid < level->tile_count; tid++) {
-            bool** tile_mask = level->masks[tid];
+            bool* tile_mask = level->masks[tid];
             if (!tile_mask) continue;
             if (seen && ptr_seen(seen, seen_count, tile_mask)) continue;
             if (seen) seen[seen_count++] = tile_mask;
-            for (uint8_t x = 0; x < level->tile_w; x++) {
-                free(tile_mask[x]);
-            }
             free(tile_mask);
         }
         free(seen);
@@ -138,7 +134,7 @@ static int level_runtime_load_tf(Level* level) {
 
     level->collision_type = (uint8_t*)calloc(tile_count, sizeof(uint8_t));
     level->transform = (uint8_t*)calloc(tile_count, sizeof(uint8_t));
-    level->masks = (bool***)calloc(tile_count, sizeof(bool**));
+    level->masks = (bool**)calloc(tile_count, sizeof(bool*));
     if (!level->collision_type || !level->transform || !level->masks) {
         resource_free(tf);
         return 0;
@@ -161,33 +157,23 @@ static int level_runtime_load_tf(Level* level) {
         *p += 5;
 
         if (collision_type == 1) {
-            bool** tile_mask = (bool**)calloc(level->tile_w, sizeof(bool*));
+            size_t mask_bytes = (size_t)level->tile_w * (size_t)level->tile_h;
+            bool* tile_mask = (bool*)calloc(mask_bytes, sizeof(bool));
             if (!tile_mask) {
                 resource_free(tf);
                 return 0;
             }
-            for (uint8_t x = 0; x < level->tile_w; x++) {
-                tile_mask[x] = (bool*)calloc(level->tile_h, sizeof(bool));
-                if (!tile_mask[x]) {
-                    for (uint8_t i = 0; i < x; i++) free(tile_mask[i]);
-                    free(tile_mask);
-                    resource_free(tf);
-                    return 0;
-                }
-            }
-            size_t mask_bytes = (size_t)level->tile_w * (size_t)level->tile_h;
             if (!require_bytes("level_runtime_load_tf(mask)", *p, end, mask_bytes)) {
-                for (uint8_t x = 0; x < level->tile_w; x++) free(tile_mask[x]);
                 free(tile_mask);
                 resource_free(tf);
                 return 0;
             }
             // Keep the original Java storage order: bytes are read row-by-row,
-            // but stored as tile_mask[x][y]. Collision intentionally samples the
-            // same data as tile_mask[y][x]; resource data in /res/tf depends on it.
+            // but stored in transposed coordinates x + y*tile_w. Collision intentionally
+            // samples the same data with transposed indices; shipped /res/tf depends on it.
             for (uint8_t y = 0; y < level->tile_h; y++) {
                 for (uint8_t x = 0; x < level->tile_w; x++) {
-                    tile_mask[x][y] = ((*p)[0] != 0);
+                    tile_mask[x + y * (size_t)level->tile_w] = ((*p)[0] != 0);
                     (*p)++;
                 }
             }
@@ -198,7 +184,7 @@ static int level_runtime_load_tf(Level* level) {
             resource_free(tf);
             return 0;
         }
-        uint32_t aux = read_be32(*p);
+        uint32_t aux = endian_read_be32_u32(*p);
         *p += 4;
 
         if (collision_type == 3) {
@@ -216,37 +202,6 @@ static int level_runtime_load_tf(Level* level) {
 
     resource_free(tf);
     return 1;
-}
-
-static void apply_transform_16(uint8_t transform, int* x, int* y) {
-    int k = 15;
-    int m = 15;
-    int i10 = *x;
-    int i11 = *y;
-    if (transform & 0x8) i10 = k - i10;
-    if (transform & 0x4) i11 = m - i11;
-    switch (transform & 0x3) {
-        case 0:
-            break;
-        case 1: {
-            int t = i10;
-            i10 = i11;
-            i11 = m - t;
-            break;
-        }
-        case 2:
-            i10 = k - i10;
-            i11 = m - i11;
-            break;
-        case 3: {
-            int t = i11;
-            i11 = i10;
-            i10 = m - t;
-            break;
-        }
-    }
-    *x = i10;
-    *y = i11;
 }
 
 static int object_width(const Level* level, int idx, int for_tile_units) {
@@ -267,6 +222,145 @@ static int object_height(const Level* level, int idx, int for_tile_units) {
         case 2: return for_tile_units ? 1 : 11;
         default: return 0;
     }
+}
+
+static int rects_overlap(int x1, int y1, int x2, int y2, int rx1, int ry1, int rx2, int ry2);
+
+static bool level_test_collision_raw(Level* level,
+                                     int rect_x, int rect_y, int rect_w, int rect_h,
+                                     const bool* player_mask,
+                                     int* out_hit_x, int* out_hit_y, int max_hits,
+                                     bool* out_overflow,
+                                     int* out_active_object_index,
+                                     bool collect_details) {
+    if (!level || !level->tile_map || !level->collision_type || !level->transform || !level->masks) return false;
+    if (collect_details && max_hits <= 0) return false;
+
+    if (collect_details) {
+        for (int i = 0; i < max_hits; i++) {
+            out_hit_x[i] = -1;
+            out_hit_y[i] = -1;
+        }
+        for (int i = 0; i < 5; i++) {
+            level->hit_cols[i] = -1;
+            level->hit_rows[i] = -1;
+        }
+        level->hits_overflow = false;
+        level->active_object_index = -1;
+        if (out_overflow) *out_overflow = false;
+        if (out_active_object_index) *out_active_object_index = -1;
+    }
+
+    int hit_count = 0;
+    int start_tile_x = rect_x / level->tile_w;
+    int end_tile_x = (rect_x + rect_w) / level->tile_w;
+    int start_tile_y = rect_y / level->tile_h;
+    int end_tile_y = (rect_y + rect_h) / level->tile_h;
+    bool collided = false;
+
+    for (int tx = start_tile_x; tx <= end_tile_x; tx++) {
+        for (int ty = start_tile_y; ty <= end_tile_y; ty++) {
+            if (tx < 0 || ty < 0 || tx >= (int)level->width || ty >= (int)level->height) {
+                if (collect_details) {
+                    if (out_overflow) *out_overflow = true;
+                    level->hits_overflow = true;
+                }
+                return true;
+            }
+
+            uint8_t tile_byte = level_get_tile(level, tx, ty);
+            uint8_t tile_id = (uint8_t)(tile_byte & level->tile_id_mask);
+            if (tile_id >= level->tile_count) continue;
+            uint8_t collision_type = level->collision_type[tile_id];
+            if (collision_type == 0) continue;
+
+            int tile_px_x = tx * level->tile_w;
+            int tile_px_y = ty * level->tile_h;
+            int overlap_x1 = (rect_x > tile_px_x) ? rect_x : tile_px_x;
+            int overlap_y1 = (rect_y > tile_px_y) ? rect_y : tile_px_y;
+            int overlap_x2 = ((rect_x + rect_w) < (tile_px_x + level->tile_w)) ? (rect_x + rect_w) : (tile_px_x + level->tile_w);
+            int overlap_y2 = ((rect_y + rect_h) < (tile_px_y + level->tile_h)) ? (rect_y + rect_h) : (tile_px_y + level->tile_h);
+            if (overlap_x1 >= overlap_x2 || overlap_y1 >= overlap_y2) continue;
+
+            bool tile_collided = false;
+            if (collision_type == 2) {
+                for (int py = overlap_y1; py < overlap_y2 && !tile_collided; py++) {
+                    for (int px = overlap_x1; px < overlap_x2; px++) {
+                        if (player_mask) {
+                            int local_x = px - rect_x;
+                            int local_y = py - rect_y;
+                            if (!player_mask[local_y * rect_w + local_x]) continue;
+                        }
+                        tile_collided = true;
+                        break;
+                    }
+                }
+            } else {
+                bool* tile_mask = level->masks[tile_id];
+                if (!tile_mask) continue;
+                for (int py = overlap_y1; py < overlap_y2 && !tile_collided; py++) {
+                    for (int px = overlap_x1; px < overlap_x2; px++) {
+                        int mask_x = px - tile_px_x;
+                        int mask_y = py - tile_px_y;
+                        if (collision_type == 3) {
+                            transform_point_16(level->transform[tile_id], &mask_x, &mask_y);
+                        }
+                        if (mask_x < 0 || mask_y < 0 || mask_x >= level->tile_w || mask_y >= level->tile_h) continue;
+                        if (!tile_mask[mask_y + mask_x * (size_t)level->tile_w]) continue;
+                        if (player_mask) {
+                            int local_x = px - rect_x;
+                            int local_y = py - rect_y;
+                            if (!player_mask[local_y * rect_w + local_x]) continue;
+                        }
+                        tile_collided = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!tile_collided) continue;
+            if (!collect_details) return true;
+
+            collided = true;
+            if (hit_count < max_hits) {
+                out_hit_x[hit_count] = tx;
+                out_hit_y[hit_count] = ty;
+                if (hit_count < 5) {
+                    level->hit_cols[hit_count] = tx;
+                    level->hit_rows[hit_count] = ty;
+                }
+                hit_count++;
+            } else {
+                level->hits_overflow = true;
+                if (out_overflow) *out_overflow = true;
+                return true;
+            }
+        }
+    }
+
+    bool object_collided = false;
+    if (level->objects.count > 0) {
+        int rx1 = rect_x;
+        int ry1 = rect_y;
+        int rx2 = rect_x + rect_w;
+        int ry2 = rect_y + rect_h;
+        for (uint8_t i = 0; i < level->objects.count; i++) {
+            int top = level->objects.f[i][0] * 16 + level->objects.ag[i][1];
+            int left = level->objects.f[i][1] * 16 + level->objects.ag[i][0];
+            int w = object_width(level, i, 0);
+            int h = object_height(level, i, 0);
+            if (rects_overlap(left, top, left + w, top + h, rx1, ry1, rx2, ry2)) {
+                object_collided = true;
+                if (collect_details) {
+                    level->active_object_index = (int)i;
+                    if (out_active_object_index) *out_active_object_index = (int)i;
+                }
+                break;
+            }
+        }
+    }
+
+    return collided || object_collided;
 }
 
 static int rects_overlap(int x1, int y1, int x2, int y2, int rx1, int ry1, int rx2, int ry2) {
@@ -443,7 +537,7 @@ void level_objects_tick(Level* level,
                         int player_top,
                         int player_right,
                         int player_bottom,
-                        bool player_is_popped) {
+                        bool player_is_stone) {
     if (!level || level->objects.count == 0) return;
     for (uint8_t idx = 0; idx < level->objects.count; idx++) {
         uint8_t type = level->objects.ao[idx];
@@ -455,7 +549,6 @@ void level_objects_tick(Level* level,
         int i5 = level->objects.ag[idx][1];
         int b2 = level->objects.s[idx][0];
         int b3 = level->objects.s[idx][1];
-
         if (type == 0 || type == 2) {
             int i6 = object_width(level, idx, 0);
             int i7 = object_height(level, idx, 0);
@@ -469,7 +562,7 @@ void level_objects_tick(Level* level,
             int i14 = (i2 - n) * 16;
 
             for (int c = 0; c < i8; c++) {
-                if (player_is_popped && type == 0) {
+                if (player_is_stone && type == 0) {
                     if (!rects_overlap(i9, i10, i11, i12,
                                        player_left, player_top, player_right, player_bottom)) {
                         i4 += b4;
@@ -487,7 +580,7 @@ void level_objects_tick(Level* level,
             b4 = (b3 > 0) ? 1 : -1;
             i8 = abs(b3);
             for (int c = 0; c < i8; c++) {
-                if (player_is_popped && type == 0) {
+                if (player_is_stone && type == 0) {
                     if (!rects_overlap(i9, i10, i11, i12,
                                        player_left, player_top, player_right, player_bottom)) {
                         i5 += b4;
@@ -496,6 +589,11 @@ void level_objects_tick(Level* level,
                     i5 += b4;
                 }
                 if (i5 == 0 || i5 == i14) {
+                    if (type == 2 && g_debug_log) {
+                        fprintf(g_debug_log,
+                                "lift.reverse idx=%u axis=y off=%d limit=%d speed=%d->%d\n",
+                                (unsigned)idx, i5, i14, b3, -b3);
+                    }
                     b3 = -b3;
                 }
             }
@@ -513,7 +611,7 @@ void level_objects_tick(Level* level,
             if (i9 > 3) i9 = 3;
 
             for (int c = 0; c < i9; c++) {
-                if (player_is_popped) {
+                if (player_is_stone) {
                     int i10 = i1 * 16;
                     int i11 = n * 16 + i5;
                     int i12 = i10 + i7;
@@ -542,139 +640,14 @@ bool level_test_collision_collect(Level* level,
                                   int* out_hit_x, int* out_hit_y, int max_hits,
                                   bool* out_overflow,
                                   int* out_active_object_index) {
-    if (!level || !level->tile_map || !level->collision_type || !level->transform || !level->masks) return false;
-    if (max_hits <= 0) return false;
-
-    for (int i = 0; i < max_hits; i++) {
-        out_hit_x[i] = -1;
-        out_hit_y[i] = -1;
-    }
-    for (int i = 0; i < 5; i++) {
-        level->hit_cols[i] = -1;
-        level->hit_rows[i] = -1;
-    }
-    level->hits_overflow = false;
-    level->active_object_index = -1;
-    if (out_overflow) *out_overflow = false;
-    if (out_active_object_index) *out_active_object_index = -1;
-
-    int hit_count = 0;
-    int start_tile_x = rect_x / level->tile_w;
-    int end_tile_x = (rect_x + rect_w) / level->tile_w;
-    int start_tile_y = rect_y / level->tile_h;
-    int end_tile_y = (rect_y + rect_h) / level->tile_h;
-    bool collided = false;
-
-    for (int tx = start_tile_x; tx <= end_tile_x; tx++) {
-        for (int ty = start_tile_y; ty <= end_tile_y; ty++) {
-            if (tx < 0 || ty < 0 || tx >= (int)level->width || ty >= (int)level->height) {
-                if (out_overflow) *out_overflow = true;
-                level->hits_overflow = true;
-                return true;
-            }
-
-            uint8_t tile_byte = level_get_tile(level, tx, ty);
-            uint8_t tile_id = (uint8_t)(tile_byte & level->tile_id_mask);
-            if (tile_id >= level->tile_count) continue;
-            uint8_t collision_type = level->collision_type[tile_id];
-            if (collision_type == 0) continue;
-
-            int tile_px_x = tx * level->tile_w;
-            int tile_px_y = ty * level->tile_h;
-            int overlap_x1 = (rect_x > tile_px_x) ? rect_x : tile_px_x;
-            int overlap_y1 = (rect_y > tile_px_y) ? rect_y : tile_px_y;
-            int overlap_x2 = ((rect_x + rect_w) < (tile_px_x + level->tile_w)) ? (rect_x + rect_w) : (tile_px_x + level->tile_w);
-            int overlap_y2 = ((rect_y + rect_h) < (tile_px_y + level->tile_h)) ? (rect_y + rect_h) : (tile_px_y + level->tile_h);
-            if (overlap_x1 >= overlap_x2 || overlap_y1 >= overlap_y2) continue;
-
-            bool tile_collided = false;
-            if (collision_type == 2) {
-                for (int py = overlap_y1; py < overlap_y2 && !tile_collided; py++) {
-                    for (int px = overlap_x1; px < overlap_x2; px++) {
-                        if (player_mask) {
-                            int local_x = px - rect_x;
-                            int local_y = py - rect_y;
-                            if (!player_mask[local_y * rect_w + local_x]) continue;
-                        }
-                        tile_collided = true;
-                        break;
-                    }
-                }
-            } else {
-                bool** tile_mask = level->masks[tile_id];
-                if (!tile_mask) continue;
-                for (int py = overlap_y1; py < overlap_y2 && !tile_collided; py++) {
-                    for (int px = overlap_x1; px < overlap_x2; px++) {
-                        int mask_x = px - tile_px_x;
-                        int mask_y = py - tile_px_y;
-                        if (collision_type == 3) {
-                            apply_transform_16(level->transform[tile_id], &mask_x, &mask_y);
-                        }
-                        if (mask_x < 0 || mask_y < 0 || mask_x >= level->tile_w || mask_y >= level->tile_h) continue;
-                        // Do not "fix" this to [mask_x][mask_y]: Java collision reads
-                        // the inline mask with transposed indices, and shipped /res/tf
-                        // masks are authored for that runtime behavior.
-                        if (!tile_mask[mask_y][mask_x]) continue;
-                        if (player_mask) {
-                            int local_x = px - rect_x;
-                            int local_y = py - rect_y;
-                            if (!player_mask[local_y * rect_w + local_x]) continue;
-                        }
-                        tile_collided = true;
-                        break;
-                    }
-                }
-            }
-
-            if (tile_collided) {
-                collided = true;
-                if (hit_count < max_hits) {
-                    out_hit_x[hit_count] = tx;
-                    out_hit_y[hit_count] = ty;
-                    if (hit_count < 5) {
-                        level->hit_cols[hit_count] = tx;
-                        level->hit_rows[hit_count] = ty;
-                    }
-                    hit_count++;
-                } else {
-                    level->hits_overflow = true;
-                    if (out_overflow) *out_overflow = true;
-                    return true;
-                }
-            }
-        }
-    }
-
-    if (level->objects.count > 0) {
-        int rx1 = rect_x;
-        int ry1 = rect_y;
-        int rx2 = rect_x + rect_w;
-        int ry2 = rect_y + rect_h;
-        for (uint8_t i = 0; i < level->objects.count; i++) {
-            int top = level->objects.f[i][0] * 16 + level->objects.ag[i][1];
-            int left = level->objects.f[i][1] * 16 + level->objects.ag[i][0];
-            int w = object_width(level, i, 0);
-            int h = object_height(level, i, 0);
-            if (rects_overlap(left, top, left + w, top + h, rx1, ry1, rx2, ry2)) {
-                level->active_object_index = (int)i;
-                if (out_active_object_index) *out_active_object_index = (int)i;
-                // Java a(..., ..., ..., ..., true/false) treats object overlap as collision too.
-                collided = true;
-                break;
-            }
-        }
-    }
-
-    return collided;
+    return level_test_collision_raw(level, rect_x, rect_y, rect_w, rect_h,
+                                    player_mask, out_hit_x, out_hit_y, max_hits,
+                                    out_overflow, out_active_object_index, true);
 }
 
 bool level_test_collision(Level* level,
                           int rect_x, int rect_y, int rect_w, int rect_h,
                           const bool* player_mask) {
-    int hx[1] = { -1 };
-    int hy[1] = { -1 };
-    bool overflow = false;
-    int obj = -1;
-    return level_test_collision_collect(level, rect_x, rect_y, rect_w, rect_h,
-                                        player_mask, hx, hy, 1, &overflow, &obj);
+    return level_test_collision_raw(level, rect_x, rect_y, rect_w, rect_h,
+                                    player_mask, NULL, NULL, 0, NULL, NULL, false);
 }

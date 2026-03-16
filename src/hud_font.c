@@ -17,6 +17,7 @@ typedef struct {
 } HudAtlasRuntime;
 
 static HudAtlasRuntime g_rt[3];
+static SDL_Renderer* g_renderer = NULL;
 
 static int slot_from_height(int h) {
     if (h == 23) return 2;
@@ -101,6 +102,8 @@ static int build_atlas(SDL_Renderer* renderer, int font_height) {
     int slot = slot_from_height(font_height);
     HudAtlasRuntime* rt = &g_rt[slot];
 
+    if (rt->pages) return 0;
+
     rt->atlas = font_atlas_get(font_height);
     if (!rt->atlas) return -1;
 
@@ -116,11 +119,17 @@ static int build_atlas(SDL_Renderer* renderer, int font_height) {
     return 0;
 }
 
+static int ensure_atlas(int font_height) {
+    int slot = slot_from_height(font_height);
+    HudAtlasRuntime* rt = &g_rt[slot];
+    if (rt->pages) return 0;
+    if (!g_renderer) return -1;
+    return build_atlas(g_renderer, font_height);
+}
+
 int hud_font_init(SDL_Renderer* renderer) {
     memset(g_rt, 0, sizeof(g_rt));
-    if (build_atlas(renderer, 9) != 0) return -1;
-    if (build_atlas(renderer, 12) != 0) return -1;
-    if (build_atlas(renderer, 23) != 0) return -1;
+    g_renderer = renderer;
     return 0;
 }
 
@@ -137,6 +146,7 @@ void hud_font_shutdown(void) {
         rt->atlas = NULL;
         rt->page_count = 0;
     }
+    g_renderer = NULL;
 }
 
 int hud_font_measure_text(const char* text, int font_height) {
@@ -158,6 +168,7 @@ int hud_font_measure_text(const char* text, int font_height) {
 
 void hud_font_draw_text(SDL_Renderer* renderer, int x, int y, const char* text, SDL_Color color, int font_height) {
     if (!renderer || !text) return;
+    if (ensure_atlas(font_height) != 0) return;
 
     HudAtlasRuntime* rt = &g_rt[slot_from_height(font_height)];
     if (!rt->atlas || !rt->pages) return;

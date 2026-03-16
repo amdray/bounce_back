@@ -1,5 +1,7 @@
 #include "save.h"
 
+#include "endian_utils.h"
+
 #include <pspdisplay.h>
 #include <psputility.h>
 #include <psputility_savedata.h>
@@ -65,15 +67,6 @@ static uint8_t read_u8(const uint8_t** p) {
     return v;
 }
 
-static uint32_t read_be32(const uint8_t** p) {
-    uint32_t v = ((uint32_t)(*p)[0] << 24) |
-                 ((uint32_t)(*p)[1] << 16) |
-                 ((uint32_t)(*p)[2] << 8) |
-                 ((uint32_t)(*p)[3]);
-    *p += 4;
-    return v;
-}
-
 static void save_state_free_runtime(void) {
     free(g_save.tile_map);
     g_save.tile_map = NULL;
@@ -131,7 +124,7 @@ static void save_pack_player(uint8_t** p, const PlayerSaveState* s) {
     write_be32(p, (uint32_t)s->sprite_index);
     write_be32(p, (uint32_t)s->is_large);
     write_be32(p, (uint32_t)s->is_inverted);
-    write_be32(p, (uint32_t)s->is_popped);
+    write_be32(p, (uint32_t)s->is_stone);
     write_be32(p, (uint32_t)s->gravity_down);
     write_be32(p, (uint32_t)s->is_grounded);
     write_be32(p, (uint32_t)s->has_speed_bonus);
@@ -142,7 +135,7 @@ static void save_pack_player(uint8_t** p, const PlayerSaveState* s) {
     write_be32(p, (uint32_t)s->bounce_state);
     write_be32(p, (uint32_t)s->timer_a);
     write_be32(p, (uint32_t)s->timer_b);
-    write_be32(p, (uint32_t)s->timer_c);
+    write_be32(p, (uint32_t)s->stone_timer);
     write_be32(p, (uint32_t)s->state_r);
     write_be32(p, (uint32_t)s->state_a);
     write_be32(p, (uint32_t)s->carrier_object_index);
@@ -156,36 +149,36 @@ static void save_pack_player(uint8_t** p, const PlayerSaveState* s) {
 }
 
 static void save_unpack_player(const uint8_t** p, PlayerSaveState* s) {
-    s->x_pos = (int)read_be32(p);
-    s->y_pos = (int)read_be32(p);
-    s->x_speed = (int)read_be32(p);
-    s->y_speed = (int)read_be32(p);
-    s->prev_y_speed = (int)read_be32(p);
-    s->sprite_index = (int)read_be32(p);
-    s->is_large = read_be32(p) != 0;
-    s->is_inverted = read_be32(p) != 0;
-    s->is_popped = read_be32(p) != 0;
-    s->gravity_down = read_be32(p) != 0;
-    s->is_grounded = read_be32(p) != 0;
-    s->has_speed_bonus = read_be32(p) != 0;
-    s->has_jump_bonus = read_be32(p) != 0;
-    s->has_grav_bonus = read_be32(p) != 0;
-    s->stunned = read_be32(p) != 0;
-    s->control_mask = (int)read_be32(p);
-    s->bounce_state = (int)read_be32(p);
-    s->timer_a = (int)read_be32(p);
-    s->timer_b = (int)read_be32(p);
-    s->timer_c = (int)read_be32(p);
-    s->state_r = (int)read_be32(p);
-    s->state_a = (int)read_be32(p);
-    s->carrier_object_index = (int)read_be32(p);
-    s->is_dying = read_be32(p) != 0;
-    s->spawn_tile_x = (int)read_be32(p);
-    s->spawn_tile_y = (int)read_be32(p);
-    s->spawn_is_large = read_be32(p) != 0;
-    s->god_mode = read_be32(p) != 0;
-    s->lives = (int)read_be32(p);
-    s->score = (int)read_be32(p);
+    s->x_pos = (int)endian_read_be32_advance(p);
+    s->y_pos = (int)endian_read_be32_advance(p);
+    s->x_speed = (int)endian_read_be32_advance(p);
+    s->y_speed = (int)endian_read_be32_advance(p);
+    s->prev_y_speed = (int)endian_read_be32_advance(p);
+    s->sprite_index = (int)endian_read_be32_advance(p);
+    s->is_large = endian_read_be32_advance(p) != 0;
+    s->is_inverted = endian_read_be32_advance(p) != 0;
+    s->is_stone = endian_read_be32_advance(p) != 0;
+    s->gravity_down = endian_read_be32_advance(p) != 0;
+    s->is_grounded = endian_read_be32_advance(p) != 0;
+    s->has_speed_bonus = endian_read_be32_advance(p) != 0;
+    s->has_jump_bonus = endian_read_be32_advance(p) != 0;
+    s->has_grav_bonus = endian_read_be32_advance(p) != 0;
+    s->stunned = endian_read_be32_advance(p) != 0;
+    s->control_mask = (int)endian_read_be32_advance(p);
+    s->bounce_state = (int)endian_read_be32_advance(p);
+    s->timer_a = (int)endian_read_be32_advance(p);
+    s->timer_b = (int)endian_read_be32_advance(p);
+    s->stone_timer = (int)endian_read_be32_advance(p);
+    s->state_r = (int)endian_read_be32_advance(p);
+    s->state_a = (int)endian_read_be32_advance(p);
+    s->carrier_object_index = (int)endian_read_be32_advance(p);
+    s->is_dying = endian_read_be32_advance(p) != 0;
+    s->spawn_tile_x = (int)endian_read_be32_advance(p);
+    s->spawn_tile_y = (int)endian_read_be32_advance(p);
+    s->spawn_is_large = endian_read_be32_advance(p) != 0;
+    s->god_mode = endian_read_be32_advance(p) != 0;
+    s->lives = (int)endian_read_be32_advance(p);
+    s->score = (int)endian_read_be32_advance(p);
 }
 
 static bool save_store_data_buffer(const void* data_buf, size_t data_size);
@@ -256,29 +249,29 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
     if (!buf || size < 4 + 4) return false;
 
     save_state_free_runtime();
-    magic = read_be32(&p);
-    version = read_be32(&p);
+    magic = endian_read_be32_advance(&p);
+    version = endian_read_be32_advance(&p);
     if (magic != SAVE_MAGIC || version != SAVE_VERSION) return false;
 
     g_save.magic = magic;
     g_save.version = version;
-    g_save.unlocked_level = (int)read_be32(&p);
+    g_save.unlocked_level = (int)endian_read_be32_advance(&p);
     g_save.sound_on = read_u8(&p) != 0;
     g_save.vibra_on = read_u8(&p) != 0;
     (void)read_u8(&p);
     (void)read_u8(&p);
     for (int i = 0; i < 5; i++) {
-        g_save.records[i] = (int)read_be32(&p);
+        g_save.records[i] = (int)endian_read_be32_advance(&p);
     }
     g_save.continue_state = (SaveContinueState)read_u8(&p);
     (void)read_u8(&p);
     (void)read_u8(&p);
     (void)read_u8(&p);
-    g_save.continue_level_index = (int)read_be32(&p);
-    g_save.continue_lives = (int)read_be32(&p);
-    g_save.continue_levels_done = (int)read_be32(&p);
-    g_save.continue_total_score = (int)read_be32(&p);
-    g_save.continue_level_elapsed_ms = read_be32(&p);
+    g_save.continue_level_index = (int)endian_read_be32_advance(&p);
+    g_save.continue_lives = (int)endian_read_be32_advance(&p);
+    g_save.continue_levels_done = (int)endian_read_be32_advance(&p);
+    g_save.continue_total_score = (int)endian_read_be32_advance(&p);
+    g_save.continue_level_elapsed_ms = endian_read_be32_advance(&p);
     if (version >= 2) {
         g_save.continue_one_go = read_u8(&p) != 0;
         (void)read_u8(&p);
@@ -290,10 +283,10 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
     save_unpack_player(&p, &g_save.player);
 
     if (g_save.continue_state == SAVE_CONTINUE_GAME) {
-        g_save.level_width = (int)read_be32(&p);
-        g_save.level_height = (int)read_be32(&p);
-        g_save.hoops_remaining = (int)read_be32(&p);
-        g_save.object_count = (int)read_be32(&p);
+        g_save.level_width = (int)endian_read_be32_advance(&p);
+        g_save.level_height = (int)endian_read_be32_advance(&p);
+        g_save.hoops_remaining = (int)endian_read_be32_advance(&p);
+        g_save.object_count = (int)endian_read_be32_advance(&p);
         if (g_save.level_width <= 0 || g_save.level_height <= 0 || g_save.object_count < 0) return false;
         g_save.tile_map_size = (size_t)g_save.level_width * (size_t)g_save.level_height;
         if (p + g_save.tile_map_size > end) return false;
@@ -308,8 +301,8 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
         }
         for (int i = 0; i < g_save.object_count; i++) {
             if (p + 10 > end) return false;
-            g_save.object_ag[i][0] = (int)read_be32(&p);
-            g_save.object_ag[i][1] = (int)read_be32(&p);
+            g_save.object_ag[i][0] = (int)endian_read_be32_advance(&p);
+            g_save.object_ag[i][1] = (int)endian_read_be32_advance(&p);
             g_save.object_s[i][0] = (int8_t)read_u8(&p);
             g_save.object_s[i][1] = (int8_t)read_u8(&p);
         }

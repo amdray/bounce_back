@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 
+#include "game_assets.h"
 #include "tileset_loader.h"
 
 typedef struct {
@@ -13,9 +14,10 @@ typedef struct {
     int speed_bonus_counter;
     int grav_bonus_counter;
     int jump_bonus_counter;
+    int stone_bonus_counter;
 } HudState;
 
-int hud_init(SDL_Renderer* renderer);
+int hud_init(SDL_Renderer* renderer, const IcAssets* ic);
 void hud_shutdown(void);
 void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* life_ball_icon_tex, const HudState* state);
 

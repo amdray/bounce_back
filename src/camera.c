@@ -5,7 +5,6 @@
 #include "camera.h"
 
 // Gameplay viewport excludes HUD strip at bottom.
-#define HUD_HEIGHT 21
 #define CAMERA_VIEW_HEIGHT (SCREEN_HEIGHT - HUD_HEIGHT)
 
 static inline bool is_level_small(int level_height) {

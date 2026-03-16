@@ -1,31 +1,11 @@
 #include "bg_layer.h"
 
+#include "endian_utils.h"
 #include "resource_loader.h"
-
-#include <SDL2/SDL_image.h>
+#include "texture_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-static inline int32_t read_be32_i(const uint8_t* p) {
-    return (int32_t)(
-        ((uint32_t)p[0] << 24) |
-        ((uint32_t)p[1] << 16) |
-        ((uint32_t)p[2] << 8)  |
-        (uint32_t)p[3]
-    );
-}
-
-static SDL_Texture* load_png_texture_from_mem(SDL_Renderer* renderer, const uint8_t* data, size_t size) {
-    if (!renderer || !data || size == 0) return NULL;
-    SDL_RWops* rw = SDL_RWFromConstMem(data, (int)size);
-    if (!rw) return NULL;
-    SDL_Surface* surface = IMG_LoadTyped_RW(rw, 1, "PNG");
-    if (!surface) return NULL;
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-    return texture;
-}
 
 static int wrap_mod(int v, int mod) {
     if (mod <= 0) return 0;
@@ -73,7 +53,7 @@ BgLayer* bg_layer_load(SDL_Renderer* renderer,
     uint8_t split_index = p0[7];
     uint8_t tile_id_mask = p0[8];
     uint8_t tile_flag_mask = p0[9];
-    (void)read_be32_i(p0 + 10);
+    (void)endian_read_be32_i32(p0 + 10);
     p0 += 14;
     if (p0 >= end0) {
         resource_free(bg_res);
@@ -143,7 +123,7 @@ BgLayer* bg_layer_load(SDL_Renderer* renderer,
             resource_free(bg_res);
             return NULL;
         }
-        int32_t aux = read_be32_i(*p);
+        int32_t aux = endian_read_be32_i32(*p);
         *p += 4;
 
         bg->meta[tile_id].render_type = render_type;
@@ -198,7 +178,7 @@ BgLayer* bg_layer_load(SDL_Renderer* renderer,
     for (int i = 0; i < (int)images_base && i < bg->texture_count; i++) {
         size_t sz = 0;
         const uint8_t* data = resource_get_element(ib0, i, &sz);
-        bg->textures[i] = load_png_texture_from_mem(renderer, data, sz);
+        bg->textures[i] = texture_loader_png_from_memory(renderer, data, sz);
     }
 
     if (ibt) {
@@ -206,7 +186,7 @@ BgLayer* bg_layer_load(SDL_Renderer* renderer,
         for (int i = (int)images_base; i < bg->texture_count; i++) {
             size_t sz = 0;
             const uint8_t* data = resource_get_element(ibt, theme_idx++, &sz);
-            bg->textures[i] = load_png_texture_from_mem(renderer, data, sz);
+            bg->textures[i] = texture_loader_png_from_memory(renderer, data, sz);
         }
         resource_free(ibt);
     }

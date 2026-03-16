@@ -1,14 +1,10 @@
 #include "hud.h"
 
 #include "hud_font.h"
-#include "resource_loader.h"
 #include "game_constants.h"
 
-#include <SDL2/SDL_image.h>
 #include <stdio.h>
 #define SCORE_DIGITS  8
-
-#define HUD_HEIGHT 21
 
 #define HUD_COLOUR_R 0x29
 #define HUD_COLOUR_G 0x31
@@ -22,29 +18,25 @@
 #define COLOR_BONUS_BAR_G 0xD3
 #define COLOR_BONUS_BAR_B 0x31
 
-static ResourceContainer* g_ic_container = NULL;
-static SDL_Texture* g_hud_lives_strip = NULL; // original S[1] from /res/ic: icon + baked digit
-static SDL_Texture* g_hud_ring_icon = NULL;   // original S[2] from /res/ic
+/* Textures borrowed from IcAssets — NOT owned by hud. */
+static SDL_Texture* g_hud_lives_strip = NULL; /* ic[1] — lives strip  */
+static SDL_Texture* g_hud_ring_icon   = NULL; /* ic[2] — ring icon    */
 static int g_hud_lives_w = 0;
 static int g_hud_lives_h = 0;
 static int g_hud_ring_w = 0;
 static int g_hud_ring_h = 0;
 
-static SDL_Texture* load_png_texture_from_mem(SDL_Renderer* renderer, const uint8_t* data, size_t size) {
-    if (!renderer || !data || size == 0) return NULL;
-    SDL_RWops* rw = SDL_RWFromConstMem(data, (int)size);
-    if (!rw) return NULL;
-    SDL_Surface* surface = IMG_Load_RW(rw, 1);
-    if (!surface) return NULL;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-    return tex;
-}
-
 static void format_score_string(int score, char* buffer) {
     if (score < 0) score = 0;
     if (score > 99999999) score = 99999999;
     snprintf(buffer, SCORE_DIGITS + 1, "%0*d", SCORE_DIGITS, score);
+}
+
+static int normalize_bonus_bar_units(int bonus_counter) {
+    if (bonus_counter <= 0) return 0;
+    bonus_counter /= BONUS_BAR_TICK_DIVISOR;
+    if (bonus_counter > BONUS_BAR_MAX_UNITS) bonus_counter = BONUS_BAR_MAX_UNITS;
+    return bonus_counter;
 }
 
 // 1:1 from bounce_zero/src/game.c (with SDL rect primitives)
@@ -61,7 +53,8 @@ static void draw_bonus_bar(SDL_Renderer* renderer, int x, int y, int bonus_value
     SDL_RenderDrawLine(renderer, x + frame_width - 1, y, x + frame_width - 1, y + frame_height - 1);
 
     if (bonus_value > 0) {
-        int current_bar_width = (bar_width * bonus_value) / 300;
+        if (bonus_value > BONUS_BAR_MAX_UNITS) bonus_value = BONUS_BAR_MAX_UNITS;
+        int current_bar_width = (bar_width * bonus_value) / BONUS_BAR_MAX_UNITS;
         if (current_bar_width > 0) {
             SDL_Rect bar = { x + 1, y + 1, current_bar_width, bar_height };
             SDL_SetRenderDrawColor(renderer, COLOR_BONUS_BAR_R, COLOR_BONUS_BAR_G, COLOR_BONUS_BAR_B, 255);
@@ -70,50 +63,31 @@ static void draw_bonus_bar(SDL_Renderer* renderer, int x, int y, int bonus_value
     }
 }
 
-int hud_init(SDL_Renderer* renderer) {
+int hud_init(SDL_Renderer* renderer, const IcAssets* ic) {
     if (hud_font_init(renderer) != 0) return -1;
 
-    g_ic_container = resource_load("res/ic");
-    if (!g_ic_container) return 0;
+    if (!ic) return 0;
 
-    size_t elem_size = 0;
-    const uint8_t* elem = resource_get_element(g_ic_container, 1, &elem_size); // S[1] in original
-    if (!elem || elem_size == 0) return 0;
+    /* Borrow pre-decoded textures — hud does not own them. */
+    g_hud_lives_strip = ic->lives_strip;
+    g_hud_ring_icon   = ic->ring_icon;
 
-    g_hud_lives_strip = load_png_texture_from_mem(renderer, elem, elem_size);
-    if (!g_hud_lives_strip) return 0;
+    if (g_hud_lives_strip)
+        SDL_QueryTexture(g_hud_lives_strip, NULL, NULL, &g_hud_lives_w, &g_hud_lives_h);
+    if (g_hud_ring_icon)
+        SDL_QueryTexture(g_hud_ring_icon,   NULL, NULL, &g_hud_ring_w,  &g_hud_ring_h);
 
-    SDL_QueryTexture(g_hud_lives_strip, NULL, NULL, &g_hud_lives_w, &g_hud_lives_h);
-
-    elem_size = 0;
-    elem = resource_get_element(g_ic_container, 2, &elem_size); // S[2] in original
-    if (elem && elem_size > 0) {
-        g_hud_ring_icon = load_png_texture_from_mem(renderer, elem, elem_size);
-        if (g_hud_ring_icon) {
-            SDL_QueryTexture(g_hud_ring_icon, NULL, NULL, &g_hud_ring_w, &g_hud_ring_h);
-        }
-    }
     return 0;
 }
 
 void hud_shutdown(void) {
-    if (g_hud_ring_icon) {
-        SDL_DestroyTexture(g_hud_ring_icon);
-        g_hud_ring_icon = NULL;
-    }
-    g_hud_ring_w = 0;
-    g_hud_ring_h = 0;
-
-    if (g_hud_lives_strip) {
-        SDL_DestroyTexture(g_hud_lives_strip);
-        g_hud_lives_strip = NULL;
-    }
-    g_hud_lives_w = 0;
-    g_hud_lives_h = 0;
-    if (g_ic_container) {
-        resource_free(g_ic_container);
-        g_ic_container = NULL;
-    }
+    /* Textures are owned by GameAssets — only null out the borrowed pointers. */
+    g_hud_ring_icon   = NULL;
+    g_hud_ring_w      = 0;
+    g_hud_ring_h      = 0;
+    g_hud_lives_strip = NULL;
+    g_hud_lives_w     = 0;
+    g_hud_lives_h     = 0;
     hud_font_shutdown();
 }
 
@@ -132,9 +106,14 @@ void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* lif
     SDL_RenderFillRect(renderer, &blue);
 
     int max_bonus = 0;
-    if (state->speed_bonus_counter > max_bonus) max_bonus = state->speed_bonus_counter;
-    if (state->grav_bonus_counter > max_bonus) max_bonus = state->grav_bonus_counter;
-    if (state->jump_bonus_counter > max_bonus) max_bonus = state->jump_bonus_counter;
+    int speed_bonus = normalize_bonus_bar_units(state->speed_bonus_counter);
+    int grav_bonus = normalize_bonus_bar_units(state->grav_bonus_counter);
+    int jump_bonus = normalize_bonus_bar_units(state->jump_bonus_counter);
+    int stone_bonus = normalize_bonus_bar_units(state->stone_bonus_counter);
+    if (speed_bonus > max_bonus) max_bonus = speed_bonus;
+    if (grav_bonus > max_bonus) max_bonus = grav_bonus;
+    if (jump_bonus > max_bonus) max_bonus = jump_bonus;
+    if (stone_bonus > max_bonus) max_bonus = stone_bonus;
 
     if (tileset) {
         int remainingRings = state->total_rings - state->num_rings;
@@ -159,10 +138,10 @@ void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* lif
         if (frames > 0 && lives >= frames) lives = frames - 1;
 
         int digit_x = SCREEN_WIDTH - 5 - g_hud_lives_w;
-        int digit_y = hudStartY + 4;
+        int digit_y = hudStartY + 2;
 
         if (life_ball_icon_tex) {
-            SDL_Rect icon_dst = { digit_x - 16, digit_y, 16, 16 };
+            SDL_Rect icon_dst = { digit_x - 18, digit_y + 1, 16, 16 };
             SDL_RenderCopy(renderer, life_ball_icon_tex, NULL, &icon_dst);
         }
 

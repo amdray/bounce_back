@@ -11,25 +11,10 @@
 #include <SDL2/SDL.h>
 #include <stdbool.h>
 
+#include "game_constants.h"
 #include "input.h"
 #include "level_loader.h"
 #include "player_masks.h"
-
-// Jumps (a.java:543-568)
-#define JUMP_NORMAL    -125
-#define JUMP_INVERTED  -180
-#define JUMP_POPPED     -95
-#define BOUNCE_NORMAL   -83
-#define BOUNCE_INVERTED -120
-#define BOUNCE_POPPED   -63
-
-// Movement (a.java:1393-1430)
-#define ACCEL_NORMAL     18
-#define ACCEL_BONUS      22
-#define MAX_SPEED_NORMAL 60
-#define MAX_SPEED_BONUS  100
-#define DECEL_GROUNDED   8
-#define DECEL_AIRBORNE   3
 
 typedef struct {
     // Position (pixels) - center of ball
@@ -51,7 +36,7 @@ typedef struct {
     // State
     bool is_large;     // this.t
     bool is_inverted;  // this.I
-    bool is_popped;    // this.F
+    bool is_stone;     // this.F
     bool gravity_down; // this.p
     bool is_grounded;  // this.x
     bool has_speed_bonus; // this.j
@@ -62,7 +47,7 @@ typedef struct {
     int bounce_state;     // this.G
     int timer_a;          // this.A
     int timer_b;          // this.B
-    int timer_c;          // this.b
+    int stone_timer;      // this.b
     int state_r;          // this.r
     int state_a;          // this.a
     int carrier_object_index; // this.k (active moving object index)
@@ -99,7 +84,7 @@ typedef struct {
     int sprite_index;
     bool is_large;
     bool is_inverted;
-    bool is_popped;
+    bool is_stone;
     bool gravity_down;
     bool is_grounded;
     bool has_speed_bonus;
@@ -110,7 +95,7 @@ typedef struct {
     int bounce_state;
     int timer_a;
     int timer_b;
-    int timer_c;
+    int stone_timer;
     int state_r;
     int state_a;
     int carrier_object_index;
