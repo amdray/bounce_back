@@ -128,7 +128,7 @@ Overlap‑прямоугольник внутри тайла (используе
 - Base inline masks (`collisionType=1`): `tileId ∈ {3, 52, 54, 56, 59, 66, 69, 93, 95, 97, 99, 113}`.
 - Варианты (`collisionType=3`) — это повёрнутые/флипнутые версии этих масок (например `4/5/6` — варианты `3`).
 
-Источник артефакта: `bounce_back/tf_tiles_dump.txt:1` (сгенерирован `python3 bounce_back/dump_tf_tiles.py`).
+Источник артефакта: `artifacts/tf_tiles_dump.txt:1` (сгенерирован `python3 scripts/dump_tf_tiles.py`).
 
 ---
 
@@ -174,9 +174,9 @@ Overlap‑прямоугольник внутри тайла (используе
 Ниже — не юнит-тесты, а конкретные проверяемые факты: “в уровне есть тайл X в позиции (tileX,tileY), у него collisionType/transform/aux такие-то; для заданной точки в тайле ожидается collide / no-collide”.
 
 Источники для этих кейсов:
-- Позиции тайлов в уровнях: `bounce_back/lf_tile_positions_collision_cases.txt:1` (сгенерирован `python3 bounce_back/dump_lf_tile_positions.py --tile 4 --tile 53 --tile 102`).
-- Метаданные тайлов (`collisionType/transform/aux`): `bounce_back/tf_tiles_dump.txt:1`.
-- Базовые inline‑маски (runtime‑ориентация): `bounce_back/tf_inline_masks_runtime.txt:1`.
+- Позиции тайлов в уровнях: `artifacts/lf_tile_positions_collision_cases.txt:1` (сгенерирован `python3 scripts/dump_lf_tile_positions.py --tile 4 --tile 53 --tile 102`).
+- Метаданные тайлов (`collisionType/transform/aux`): `artifacts/tf_tiles_dump.txt:1`.
+- Базовые inline‑маски (runtime‑ориентация): `artifacts/tf_inline_masks_runtime.txt:1`.
 
 Для привязки к уровням:
 - `tile origin worldPx = (tileX*16, tileY*16)`.
@@ -229,7 +229,7 @@ Overlap‑прямоугольник внутри тайла (используе
 
 Важно: это **runtime‑ориентация**, то есть значения приведены так, как они реально читаются в коллизии (`tileMask[localY][localX]`). Из‑за того, что загрузка пишет `s[x][y]`, а коллизия читает `s[y][x]`, runtime‑маска является транспонированной относительно “как записано в /res/tf” (см. раздел 5).
 
-Источник артефакта: `bounce_back/tf_inline_masks_runtime.txt:1` (сгенерирован через `python3 bounce_back/dump_tf_tiles.py --dump-mask 3 --dump-mask 52 --dump-mask 97`).
+Источник артефакта: `artifacts/tf_inline_masks_runtime.txt:1` (сгенерирован через `python3 scripts/dump_tf_tiles.py --dump-mask 3 --dump-mask 52 --dump-mask 97`).
 
 ### tileId 3 (base для 4/5/6)
 
@@ -298,6 +298,6 @@ Overlap‑прямоугольник внутри тайла (используе
 
 ## Быстрые инструменты для извлечения фактов
 
-- Список тайлов с `collisionType=3`/`aux`/`transform`: `python3 bounce_back/dump_tf_tiles.py --only-collision3`
-- Общий дамп всех тайлов `/res/tf`: `python3 bounce_back/dump_tf_tiles.py`
+- Список тайлов с `collisionType=3`/`aux`/`transform`: `python3 scripts/dump_tf_tiles.py --only-collision3`
+- Общий дамп всех тайлов `/res/tf`: `python3 scripts/dump_tf_tiles.py`
 - Позиции тайлов по уровням можно извлечь из `/res/lf` (tileMap chunk) простым сканированием `tileByte & 0x7F`.
