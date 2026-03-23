@@ -1,5 +1,5 @@
 TARGET = bounce_back
-OBJS = src/main.o src/resource_loader.o src/level_loader.o src/tile_metadata.o src/tile_animation.o src/tileset_loader.o src/bg_layer.o src/tile_transform.o src/level_renderer.o src/enemy_renderer.o src/player_masks.o src/player.o src/input.o src/camera.o src/exit_door.o src/foreground_pass.o src/hud.o src/hud_font.o src/font_atlas.o src/font9_atlas.o src/font12_atlas.o src/font23_atlas.o src/font24.o src/menu.o src/sound.o src/save.o src/game_assets.o src/texture_loader.o
+OBJS = src/main.o src/resource_loader.o src/level_loader.o src/tile_metadata.o src/tile_animation.o src/tileset_loader.o src/bg_layer.o src/tile_transform.o src/texture_loader.o src/level_renderer.o src/enemy_renderer.o src/player_masks.o src/player.o src/input.o src/camera.o src/exit_door.o src/foreground_pass.o src/hud.o src/hud_font.o src/font_atlas.o src/font9_atlas.o src/font12_atlas.o src/font23_atlas.o src/font24.o src/menu.o src/sound.o src/save.o src/game_assets.o
 
 # ---- Release folder setup ----
 RELEASE_DIR = release

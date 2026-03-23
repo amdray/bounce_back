@@ -47,6 +47,9 @@ typedef struct {
     bool** masks;           // g.s[tileId] -> flattened mask storage
     int hit_cols[5];        // g.Y
     int hit_rows[5];        // g.P
+    uint8_t break_timers[5]; // h.B
+    int break_rows[5];       // h.J
+    int break_cols[5];       // h.v
     bool hits_overflow;
     int active_object_index; // analog this.k binding in player flow
 
@@ -57,6 +60,8 @@ Level* level_load(const char* lf_path, int level_index);
 void level_free(Level* level);
 uint8_t level_get_tile(const Level* level, int tile_x, int tile_y);
 void level_set_tile(Level* level, int tile_x, int tile_y, uint8_t tile_byte);
+void level_start_break_animation(Level* level, int tile_x, int tile_y);
+void level_breaking_tiles_tick(Level* level);
 void level_objects_tick(Level* level,
                         int player_left,
                         int player_top,

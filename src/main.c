@@ -88,6 +88,33 @@ static void present_loading_splash_for(SDL_Renderer* renderer, int phase, uint32
     }
 }
 
+static void present_startup_menu_intro(SDL_Renderer* renderer, MenuMainState* menu_main) {
+    uint32_t start = SDL_GetTicks();
+    const uint32_t duration_ms = 22u * 50u;
+    SDL_Event event;
+    Input input = {0};
+
+    if (!renderer || !menu_main) return;
+
+    while (SDL_GetTicks() - start < duration_ms) {
+        uint32_t elapsed = SDL_GetTicks() - start;
+        int ticks_elapsed = (int)(elapsed / 50u);
+        int ticks_remaining = 22 - ticks_elapsed;
+        while (SDL_PollEvent(&event)) {
+            /* Keep the window responsive during startup intro. */
+        }
+        input_update(&input);
+        if (input.jump || input.confirm_pressed || input.start_pressed) {
+            break;
+        }
+
+        if (ticks_remaining < 0) ticks_remaining = 0;
+        menu_render_startup_menu_intro(renderer, menu_main, ticks_remaining);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+}
+
 static int reload_level_state(SDL_Renderer* sdl_renderer,
                               int new_level_index,
                               int* level_index,
@@ -258,7 +285,7 @@ static int restore_continue_state(SDL_Renderer* renderer,
                                 level_renderer, player, camera, door, log)) {
             return 0;
         }
-        if (!save_restore_game(*level, *player)) {
+        if (!save_restore_game(*level, *player, door)) {
             return 0;
         }
         *total_score = save_get_continue_total_score();
@@ -306,7 +333,7 @@ int main(int argc, char *argv[]) {
     bool one_go_run = false;
     uint32_t level_start_ticks = 0;
     AppState app_state = APP_STATE_MENU;
-    MenuMainState menu_main = { .selection = 0, .has_save = false };
+    MenuMainState menu_main = { .selection = 1, .has_save = false };
     MenuLevelSelectState level_select = { .selection = 0, .top_index = 0, .level_count = 1 };
     MenuOverlayData overlay = {0};
 
@@ -535,6 +562,8 @@ int main(int argc, char *argv[]) {
         present_loading_splash(renderer, 1);
         SDL_Delay(16);
     }
+    present_startup_menu_intro(renderer, &menu_main);
+    input_sync(&input);
     if (log) fprintf(log, "[load] startup.total: %.3f s\n", elapsed_seconds(startup_t0, SDL_GetPerformanceCounter()));
     camera_init(&camera);
     camera_reset(&camera, level->width, level->height);
@@ -650,12 +679,7 @@ int main(int argc, char *argv[]) {
                     player->lives = preserved_lives;
                     level_start_ticks = SDL_GetTicks();
                 }
-                save_clear_continue();
-                save_flush();
-                menu_main.has_save = save_has_continue();
                 app_state = APP_STATE_GAME;
-            } else if (next == APP_STATE_MENU) {
-                app_state = APP_STATE_MENU;
             }
 
             /* render game world behind overlay */
@@ -732,7 +756,7 @@ int main(int argc, char *argv[]) {
         if (input.start_pressed) {
             save_capture_game(level_index, total_score, levels_done,
                               one_go_run,
-                              SDL_GetTicks() - level_start_ticks, level, player);
+                              SDL_GetTicks() - level_start_ticks, level, player, &door);
             save_flush();
             menu_main.has_save = save_has_continue();
             app_state = APP_STATE_MENU;
@@ -788,7 +812,8 @@ int main(int argc, char *argv[]) {
                 if (log) fprintf(log, "SPECIAL_CONGRATULATIONS level=%d one_go=%d\n",
                                  level_index, one_go_run ? 1 : 0);
                 if (one_go_run) {
-                    save_capture_level_complete(level_index, player->lives, levels_done, total_score, true);
+                    save_capture_level_complete(level_index, player->lives, levels_done, total_score, true,
+                                                level, player, &door);
                     save_flush();
                 } else {
                     save_insert_record(total_score);
@@ -814,7 +839,8 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            save_capture_level_complete(level_index, player->lives, levels_done, total_score, one_go_run);
+            save_capture_level_complete(level_index, player->lives, levels_done, total_score, one_go_run,
+                                        level, player, &door);
             save_flush();
             menu_main.has_save = save_has_continue();
             app_state = APP_STATE_LEVEL_COMPLETE;
@@ -822,6 +848,7 @@ int main(int argc, char *argv[]) {
         }
 
         player_update(player, level, &input);
+        level_breaking_tiles_tick(level);
 
         /* ── Game Over: lives exhausted ──────────────────── */
         if (player->lives <= 0) {
@@ -888,9 +915,10 @@ cleanup:
     if (bootstrap_complete && app_state == APP_STATE_GAME) {
         save_capture_game(level_index, total_score, levels_done,
                           one_go_run,
-                          SDL_GetTicks() - level_start_ticks, level, player);
+                          SDL_GetTicks() - level_start_ticks, level, player, &door);
     } else if (bootstrap_complete && app_state == APP_STATE_LEVEL_COMPLETE) {
-        save_capture_level_complete(level_index, player->lives, levels_done, total_score, one_go_run);
+        save_capture_level_complete(level_index, player->lives, levels_done, total_score, one_go_run,
+                                    level, player, &door);
     }
     save_shutdown();
 

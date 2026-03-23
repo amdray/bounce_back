@@ -78,41 +78,30 @@ typedef struct {
 typedef struct {
     int x_pos;
     int y_pos;
+    int spawn_tile_y;
+    int spawn_tile_x;
     int x_speed;
     int y_speed;
-    int prev_y_speed;
-    int sprite_index;
-    bool is_large;
-    bool is_inverted;
-    bool is_stone;
-    bool gravity_down;
-    bool is_grounded;
-    bool has_speed_bonus;
-    bool has_jump_bonus;
-    bool has_grav_bonus;
-    bool stunned;
-    int control_mask;
     int bounce_state;
-    int timer_a;
-    int timer_b;
+    int prev_y_speed;
     int stone_timer;
-    int state_r;
+    int timer_b;
+    bool is_grounded;
+    bool is_stone;
+    bool is_inverted;
+    bool gravity_down;
+    bool stunned;
     int state_a;
-    int carrier_object_index;
-    bool is_dying;
-    int spawn_tile_x;
-    int spawn_tile_y;
-    bool spawn_is_large;
-    bool god_mode;
-    int lives;
-    int score;
-} PlayerSaveState;
+    int state_r;
+    int timer_a;
+    int sprite_index;
+} PlayerRmsState;
 
 Player* player_create(SDL_Renderer* renderer, int spawn_x_tiles, int spawn_y_tiles, bool is_large_ball);
 void player_free(Player* p);
 void player_update(Player* p, Level* level, Input* input);
 void player_render(Player* p, SDL_Renderer* renderer, int camera_x, int camera_y);
-void player_export_state(const Player* p, PlayerSaveState* out_state);
-bool player_import_state(Player* p, const PlayerSaveState* state);
+void player_export_rms_state(const Player* p, PlayerRmsState* out_state);
+bool player_import_rms_state(Player* p, Level* level, const PlayerRmsState* state);
 
 #endif // PLAYER_H

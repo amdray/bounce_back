@@ -109,6 +109,21 @@ static const char* k_items[6] = {
 static SDL_Texture*       s_tex[IM_COUNT];
 static ResourceContainer* s_rc;
 
+static int menu_first_enabled_selection(bool has_save) {
+    return has_save ? 0 : 1;
+}
+
+static void menu_normalize_main_selection(MenuMainState* ms) {
+    if (!ms) return;
+    if (ms->selection < 0 || ms->selection >= ITEM_COUNT) {
+        ms->selection = menu_first_enabled_selection(ms->has_save);
+        return;
+    }
+    if (ms->selection == 0 && !ms->has_save) {
+        ms->selection = menu_first_enabled_selection(ms->has_save);
+    }
+}
+
 static void draw_second_splash_gradient(SDL_Renderer* renderer) {
     /* Central 208 rows are exact 1:1 from source; outside rows use edge colors. */
     const int y0 = SPLASH_OY;
@@ -355,6 +370,38 @@ static void draw_scroll_arrows(SDL_Renderer* r) {
                      0.0, NULL, SDL_FLIP_VERTICAL);
 }
 
+static int menu_startup_text_offset_for_tick(int tick) {
+    int offset = -150;
+    int h = 0;
+
+    if (tick > 22) tick = 22;
+    if (tick < 0) tick = 0;
+
+    for (int param = 22; param > tick; param--) {
+        if (param == 12 || param == 22) {
+            h = 0;
+        }
+        if (param > 12) {
+            offset += 11 + h;
+            if (((22 - param) % 2) == 1) h += 2;
+        } else if (param > 6) {
+            offset -= 3 - h;
+            if ((12 - param) == 0 || (12 - param) == 2) h++;
+        } else {
+            offset += 3 - h;
+            if ((6 - param) == 2 || (6 - param) == 4) h--;
+        }
+    }
+
+    return offset;
+}
+
+void menu_render_startup_menu_intro(SDL_Renderer* renderer,
+                                    const MenuMainState* ms,
+                                    int tick_remaining) {
+    menu_render_main_with_intro(renderer, ms, menu_startup_text_offset_for_tick(tick_remaining));
+}
+
 /* ═══════════════════════════════════════════════════════════════
    MAIN MENU — update
    6 items: Continue(0), New Game(1), Options(2), Records(3), Help(4), Exit(5)
@@ -362,6 +409,9 @@ static void draw_scroll_arrows(SDL_Renderer* r) {
    ═══════════════════════════════════════════════════════════════ */
 
 AppState menu_update_main(MenuMainState* ms, const Input* inp) {
+    if (!ms || !inp) return APP_STATE_MENU;
+    menu_normalize_main_selection(ms);
+
     /* ── sub-screen: O = back ────────────────────────────────── */
     if (ms->sub_screen != SUB_NONE) {
         if (inp->cancel_pressed) {
@@ -381,12 +431,6 @@ AppState menu_update_main(MenuMainState* ms, const Input* inp) {
         ms->selection = (ms->selection + 1) % ITEM_COUNT;
         if (ms->selection == 0 && !ms->has_save)
             ms->selection = 1;
-    }
-
-    /* Start = resume if paused mid-game */
-    if (inp->start_pressed && ms->has_save) {
-        sound_play(SND_MENU_SELECT);
-        return APP_STATE_GAME;
     }
 
     if (inp->confirm_pressed) {
@@ -413,13 +457,21 @@ AppState menu_update_main(MenuMainState* ms, const Input* inp) {
    MAIN MENU — render
    ═══════════════════════════════════════════════════════════════ */
 
-void menu_render_main(SDL_Renderer* renderer, const MenuMainState* ms) {
+void menu_render_main_with_intro(SDL_Renderer* renderer,
+                                 const MenuMainState* ms,
+                                 int text_y_offset) {
+    MenuMainState normalized;
+
+    if (!renderer || !ms) return;
+    normalized = *ms;
+    menu_normalize_main_selection(&normalized);
+
     draw_menu_bg(renderer);
 
     /* ── sub-screen overlay (Options / Records / Help) ──────── */
-    if (ms->sub_screen != SUB_NONE) {
+    if (normalized.sub_screen != SUB_NONE) {
         const char* titles[] = { "", "Options", "Records", "Help" };
-        int sub = ms->sub_screen;
+        int sub = normalized.sub_screen;
 
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
@@ -461,25 +513,29 @@ void menu_render_main(SDL_Renderer* renderer, const MenuMainState* ms) {
     const int cx = MENU_OX + 88;
 
     for (int i = 0; i < ITEM_COUNT; i++) {
-        int iy = MENU_OY + 30 + i * 18;
-        bool disabled = (i == 0 && !ms->has_save);
+        int iy = MENU_OY + 30 + i * 18 + text_y_offset;
+        bool disabled = (i == 0 && !normalized.has_save);
 
-        if (i == ms->selection && !disabled) {
+        if (i == normalized.selection && !disabled) {
             draw_selected_item_frame(renderer, iy);
         }
 
         SDL_Color col;
         if      (disabled)           col = s_col_gray;
-        else if (i == ms->selection) col = menu_pulse_color();
+        else if (i == normalized.selection) col = menu_pulse_color();
         else                         col = s_col_hint;
 
         draw_centered(renderer, cx, iy, k_items[i], col, FONT_BODY);
     }
 
     /* ── bottom hint ─────────────────────────────────────────── */
-    draw_centered(renderer, cx, SCREEN_H - FONT_SMALL - 4,
-                  "Up/Down = Navigate    X = Select    Start = Resume",
+    draw_centered(renderer, cx, SCREEN_H - FONT_SMALL - 4 + text_y_offset,
+                  "Up/Down = Navigate    X = Select",
                   s_col_hint, FONT_SMALL);
+}
+
+void menu_render_main(SDL_Renderer* renderer, const MenuMainState* ms) {
+    menu_render_main_with_intro(renderer, ms, 0);
 }
 
 AppState menu_update_level_select(MenuLevelSelectState* ls, const Input* inp) {
@@ -560,13 +616,9 @@ void menu_render_level_select(SDL_Renderer* renderer, const MenuLevelSelectState
 
 AppState menu_update_level_complete(const MenuOverlayData* d, const Input* inp) {
     (void)d;
-    if (inp->confirm_pressed || inp->start_pressed) {
+    if (inp->confirm_pressed) {
         sound_play(SND_MENU_SELECT);
         return APP_STATE_GAME; /* proceed to next level */
-    }
-    if (inp->cancel_pressed) {
-        sound_play(SND_MENU_BACK);
-        return APP_STATE_MENU;
     }
     return APP_STATE_LEVEL_COMPLETE;
 }
@@ -597,7 +649,7 @@ void menu_render_level_complete(SDL_Renderer* renderer, const MenuOverlayData* d
     snprintf(buf, sizeof(buf), "Total: %d", d->total_score);
     y = draw_centered(renderer, cx, y, buf, s_col_accent, FONT_BODY);
 
-    draw_hint(renderer, px, py, ph, "A = OK    B = Menu");
+    draw_hint(renderer, px, py, ph, "A = OK");
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -609,8 +661,8 @@ void menu_render_level_complete(SDL_Renderer* renderer, const MenuOverlayData* d
 
 AppState menu_update_game_over(const MenuOverlayData* d, const Input* inp) {
     (void)d;
-    if (inp->confirm_pressed || inp->start_pressed || inp->cancel_pressed) {
-        sound_play(inp->cancel_pressed ? SND_MENU_BACK : SND_MENU_SELECT);
+    if (inp->confirm_pressed) {
+        sound_play(SND_MENU_SELECT);
         return APP_STATE_MENU;
     }
     return APP_STATE_GAME_OVER;
@@ -645,9 +697,9 @@ void menu_render_game_over(SDL_Renderer* renderer, const MenuOverlayData* d) {
 
 AppState menu_update_congratulations(const MenuOverlayData* d, const Input* inp) {
     (void)d;
-    if (inp->confirm_pressed || inp->start_pressed || inp->cancel_pressed) {
-        sound_play(inp->cancel_pressed ? SND_MENU_BACK : SND_MENU_SELECT);
-        if (!inp->cancel_pressed && d && d->continue_to_game) {
+    if (inp->confirm_pressed) {
+        sound_play(SND_MENU_SELECT);
+        if (d && d->continue_to_game) {
             return APP_STATE_GAME;
         }
         return APP_STATE_MENU;

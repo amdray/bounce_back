@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "exit_door.h"
 #include "level_loader.h"
 #include "player.h"
 
@@ -32,14 +33,18 @@ void save_capture_game(int level_index,
                        bool one_go_run,
                        uint32_t level_elapsed_ms,
                        const Level* level,
-                       const Player* player);
+                       const Player* player,
+                       const ExitDoorState* door);
 void save_capture_level_complete(int level_index,
                                  int lives,
                                  int levels_done,
                                  int total_score,
-                                 bool one_go_run);
+                                 bool one_go_run,
+                                 const Level* level,
+                                 const Player* player,
+                                 const ExitDoorState* door);
 void save_clear_continue(void);
-bool save_restore_game(Level* level, Player* player);
+bool save_restore_game(Level* level, Player* player, ExitDoorState* door);
 
 void save_update_unlocked_level(int unlocked_level);
 int save_get_unlocked_level(void);

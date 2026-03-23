@@ -44,11 +44,17 @@ typedef struct {
 void menu_init(SDL_Renderer* renderer);
 void menu_shutdown(void);
 void menu_render_startup_splash(SDL_Renderer* renderer, int phase);
+void menu_render_startup_menu_intro(SDL_Renderer* renderer,
+                                    const MenuMainState* ms,
+                                    int tick_remaining);
+void menu_render_main_with_intro(SDL_Renderer* renderer,
+                                 const MenuMainState* ms,
+                                 int text_y_offset);
 
 /* ── Render functions (called each frame in their state) ─────── */
 /* Returns new AppState so the caller can react:
    - menu_render_main          → APP_STATE_GAME (new game), APP_STATE_MENU (still open)
-   - menu_render_level_complete→ APP_STATE_GAME (next level), APP_STATE_MENU (back)
+   - menu_render_level_complete→ APP_STATE_GAME (next level)
    - menu_render_game_over     → APP_STATE_MENU (back)
    - menu_render_congratulations→APP_STATE_MENU (back)
    All take the Input to check confirm/cancel presses.                  */
@@ -61,7 +67,7 @@ void     menu_render_main(SDL_Renderer* renderer, const MenuMainState* ms);
 AppState menu_update_level_select(MenuLevelSelectState* ls, const Input* inp);
 void     menu_render_level_select(SDL_Renderer* renderer, const MenuLevelSelectState* ls);
 
-/* Returns APP_STATE_GAME (continue to next level) or APP_STATE_MENU */
+/* Returns APP_STATE_GAME (continue to next level) or APP_STATE_LEVEL_COMPLETE */
 AppState menu_update_level_complete(const MenuOverlayData* d, const Input* inp);
 void     menu_render_level_complete(SDL_Renderer* renderer, const MenuOverlayData* d);
 

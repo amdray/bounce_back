@@ -52,6 +52,15 @@ static void level_objects_free(Level* level) {
     memset(&level->objects, 0, sizeof(level->objects));
 }
 
+static void level_break_slots_clear(Level* level) {
+    if (!level) return;
+    for (int i = 0; i < 5; i++) {
+        level->break_timers[i] = 0;
+        level->break_rows[i] = -1;
+        level->break_cols[i] = -1;
+    }
+}
+
 static void level_runtime_masks_free(Level* level) {
     if (!level) return;
     if (level->masks) {
@@ -497,6 +506,7 @@ Level* level_load(const char* lf_path, int level_index) {
         level->hit_cols[i] = -1;
         level->hit_rows[i] = -1;
     }
+    level_break_slots_clear(level);
     level->hits_overflow = false;
     level->active_object_index = -1;
 
@@ -530,6 +540,44 @@ void level_set_tile(Level* level, int tile_x, int tile_y, uint8_t tile_byte) {
     if (tile_x < 0 || tile_y < 0) return;
     if (tile_x >= (int)level->width || tile_y >= (int)level->height) return;
     level->tile_map[(size_t)tile_y * (size_t)level->width + (size_t)tile_x] = tile_byte;
+}
+
+void level_start_break_animation(Level* level, int tile_x, int tile_y) {
+    if (!level) return;
+
+    level_set_tile(level, tile_x, tile_y, 105);
+    for (int i = 0; i < 5; i++) {
+        if (level->break_timers[i] != 0) continue;
+        level->break_timers[i] = 15;
+        level->break_rows[i] = tile_y;
+        level->break_cols[i] = tile_x;
+        break;
+    }
+}
+
+void level_breaking_tiles_tick(Level* level) {
+    if (!level) return;
+
+    for (int i = 4; i >= 0; i--) {
+        if (level->break_timers[i] == 0) continue;
+
+        uint8_t timer = (uint8_t)(level->break_timers[i] - 1);
+        level->break_timers[i] = timer;
+
+        int tile_y = level->break_rows[i];
+        int tile_x = level->break_cols[i];
+        if (timer == 10) {
+            level_set_tile(level, tile_x, tile_y, 105);
+        }
+        if (timer == 5) {
+            level_set_tile(level, tile_x, tile_y, 106);
+        }
+        if (timer == 0) {
+            level_set_tile(level, tile_x, tile_y, 0);
+            level->break_rows[i] = -1;
+            level->break_cols[i] = -1;
+        }
+    }
 }
 
 void level_objects_tick(Level* level,

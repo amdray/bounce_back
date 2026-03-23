@@ -215,11 +215,8 @@ make
 - `scripts/count_tiles_on_levels.py`  
   Сбор статистики использования тайлов по всем уровням.
 
-- [`generate_level_flags_html.py`](scripts/generate_level_flags_html.py)  
-  Генерация HTML-инспектора флагов/свойств уровней для быстрой визуальной проверки карт и служебных битов.
-
-- [`ic_sizes.py`](scripts/ic_sizes.py)  
-  Анализ размеров и параметров IC-текстур, используемых для объектов/оверлеев.
+- [`dump_lf_enemies.py`](scripts/dump_lf_enemies.py)  
+  Дамп “врагов/moving objects” из `/res/lf` (каждый объект — 9 байт), включая нормализацию координат/скоростей как в `h.b(level)`. Нужен, чтобы порт врагов не был гаданием.
 
 - [`dump_lf_tile_positions.py`](scripts/dump_lf_tile_positions.py)  
   Поиск tileId по всем уровням в tileMap (/res/lf): выдаёт позиции (tileX,tileY) и флаг `0x80` (bg-fill). Нужен, чтобы привязывать “тайл X реально встречается вот здесь” в документах/контрактах.

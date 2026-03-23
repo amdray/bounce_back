@@ -148,12 +148,12 @@ static void player_apply_tile_break(Level* level, int tx, int ty);
 static void player_apply_moving_toward_support_default(Player* p, Level* level, CollisionHits* hits,
                                                         int step_y, bool jump_hold,
                                                         int tx, int ty, uint8_t id_logic,
-                                                        int* x_speed, int* y_speed,
-                                                        bool* stop_scan, bool* restart_hits) {
-    if (!p || !level || !x_speed || !y_speed || !stop_scan || !restart_hits) return;
+                                                        int* out_prev_y_speed, int* out_y_speed,
+                                                        bool* out_stop_scan, bool* out_restart_hits) {
+    if (!p || !level || !out_prev_y_speed || !out_y_speed || !out_stop_scan || !out_restart_hits) return;
 
     int probe_y = p->y_pos + step_y;
-    *x_speed = 0;
+    *out_prev_y_speed = 0;
 
     int slid = 0;
     if (!level_test_collision(level,
@@ -178,15 +178,15 @@ static void player_apply_moving_toward_support_default(Player* p, Level* level, 
         player_apply_tile_break(level, tx, ty);
     }
     if (slid) {
-        *stop_scan = true;
+        *out_stop_scan = true;
         return;
     }
 
-    if (*y_speed > 40 && !p->stunned) {
+    if (*out_y_speed > 40 && !p->stunned) {
         player_trigger_squash(p, level, 1);
     }
     if (!p->has_grav_bonus || !p->is_inverted) {
-        *y_speed = player_apply_surface_bounce(p, *y_speed, jump_hold);
+        *out_y_speed = player_apply_surface_bounce(p, *out_y_speed, jump_hold);
     }
 
     if (id_logic == 84 || id_logic == 108 || id_logic == 83) {
@@ -209,7 +209,7 @@ static void player_apply_moving_toward_support_default(Player* p, Level* level, 
                 player_kill(p);
             }
         }
-        *restart_hits = true;
+        *out_restart_hits = true;
         return;
     }
 
@@ -233,99 +233,94 @@ static void player_apply_moving_toward_support_default(Player* p, Level* level, 
                 player_kill(p);
             }
         }
-        *restart_hits = true;
+        *out_restart_hits = true;
     }
 }
 
 // Change sprite with collision check (a.java:258-326)
 static void player_change_sprite(Player* p, Level* level, int sprite_index) {
-    if (!p || sprite_index < 0 || sprite_index >= p->sprite_count) return;
+    if (!p || !level || sprite_index < 0 || sprite_index >= p->sprite_count) return;
     if (sprite_index == p->sprite_index) return;
 
     int old_w = p->sprite_width;
     int old_h = p->sprite_height;
-    
+
     p->sprite_index = sprite_index;
     if (!player_refresh_sprite_dims(p)) return;
-    
-    // Update mask for new sprite (a.java:243-255)
+
     p->active_mask = player_masks_select(p->masks, p->sprite_index, &p->mask_w, &p->mask_h);
+    if (!p->active_mask || p->mask_w <= 0 || p->mask_h <= 0) return;
     p->mask_half_w = p->mask_w / 2;
     p->mask_half_h = p->mask_h / 2;
 
-    // Check if new size collides (a.java:267-325)
-    bool collides = level_test_collision(level,
-        p->x_pos - p->mask_half_w, p->y_pos - p->mask_half_h,
-        p->mask_w, p->mask_h, p->active_mask);
-    
-    if (collides) {
-        // Try to resolve position (a.java:268-325)
-        int w_delta = abs(p->sprite_width - old_w) + 1;
-        int h_delta = abs(p->sprite_height - old_h) + 1;
-        
-        // Try horizontal shifts
+    if (!level_test_collision(level,
+            p->x_pos - p->mask_half_w, p->y_pos - p->mask_half_h,
+            p->mask_w, p->mask_h, p->active_mask)) {
+        return;
+    }
+
+    int w_delta = abs(p->sprite_width - old_w) + 1;
+    int h_delta = abs(p->sprite_height - old_h) + 1;
+
+    for (int dx = 1; dx <= w_delta; dx++) {
+        if (!level_test_collision(level,
+                            p->x_pos + dx - p->mask_half_w, p->y_pos - p->mask_half_h,
+                            p->mask_w, p->mask_h, p->active_mask)) {
+            p->x_pos += dx;
+            return;
+        }
+        if (!level_test_collision(level,
+                            p->x_pos - dx - p->mask_half_w, p->y_pos - p->mask_half_h,
+                            p->mask_w, p->mask_h, p->active_mask)) {
+            p->x_pos -= dx;
+            return;
+        }
+    }
+
+    for (int dy = 1; dy <= h_delta; dy++) {
+        if (!level_test_collision(level,
+                            p->x_pos - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
+                            p->mask_w, p->mask_h, p->active_mask)) {
+            p->y_pos += dy;
+            return;
+        }
+        if (!level_test_collision(level,
+                            p->x_pos - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
+                            p->mask_w, p->mask_h, p->active_mask)) {
+            p->y_pos -= dy;
+            return;
+        }
+    }
+
+    for (int dy = 1; dy <= h_delta; dy++) {
         for (int dx = 1; dx <= w_delta; dx++) {
             if (!level_test_collision(level,
-                                p->x_pos + dx - p->mask_half_w, p->y_pos - p->mask_half_h,
+                                p->x_pos + dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
                                 p->mask_w, p->mask_h, p->active_mask)) {
                 p->x_pos += dx;
-                return;
-            }
-            if (!level_test_collision(level,
-                                p->x_pos - dx - p->mask_half_w, p->y_pos - p->mask_half_h,
-                                p->mask_w, p->mask_h, p->active_mask)) {
-                p->x_pos -= dx;
-                return;
-            }
-        }
-        
-        // Try vertical shifts
-        for (int dy = 1; dy <= h_delta; dy++) {
-            if (!level_test_collision(level,
-                                p->x_pos - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
-                                p->mask_w, p->mask_h, p->active_mask)) {
                 p->y_pos += dy;
                 return;
             }
             if (!level_test_collision(level,
-                                p->x_pos - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
+                                p->x_pos + dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
                                 p->mask_w, p->mask_h, p->active_mask)) {
+                p->x_pos += dx;
                 p->y_pos -= dy;
                 return;
             }
-        }
-        
-        // Try diagonal
-        for (int dy = 1; dy <= h_delta; dy++) {
-            for (int dx = 1; dx <= w_delta; dx++) {
-                if (!level_test_collision(level,
-                                    p->x_pos + dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
-                                    p->mask_w, p->mask_h, p->active_mask)) {
-                    p->x_pos += dx;
-                    p->y_pos += dy;
-                    return;
-                }
-                if (!level_test_collision(level,
-                                    p->x_pos + dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
-                                    p->mask_w, p->mask_h, p->active_mask)) {
-                    p->x_pos += dx;
-                    p->y_pos -= dy;
-                    return;
-                }
-                if (!level_test_collision(level,
-                                    p->x_pos - dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
-                                    p->mask_w, p->mask_h, p->active_mask)) {
-                    p->x_pos -= dx;
-                    p->y_pos += dy;
-                    return;
-                }
-                if (!level_test_collision(level,
-                                    p->x_pos - dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
-                                    p->mask_w, p->mask_h, p->active_mask)) {
-                    p->x_pos -= dx;
-                    p->y_pos -= dy;
-                    return;
-                }
+            if (!level_test_collision(level,
+                                p->x_pos - dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
+                                p->mask_w, p->mask_h, p->active_mask)) {
+                p->x_pos -= dx;
+                p->y_pos += dy;
+                return;
+            }
+            if (!level_test_collision(level,
+                                p->x_pos - dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
+                                p->mask_w, p->mask_h, p->active_mask)) {
+                p->x_pos -= dx;
+                p->y_pos -= dy;
+                return;
             }
         }
     }
@@ -383,8 +378,8 @@ static void player_kill(Player* p) {
 }
 
 // Match a.java:e() - respawn at checkpoint
-static void player_respawn(Player* p) {
-    if (!p) return;
+static void player_respawn(Player* p, Level* level) {
+    if (!p || !level) return;
 
     p->lives--;
 
@@ -394,6 +389,7 @@ static void player_respawn(Player* p) {
     p->y_pos = p->spawn_tile_y * 16 + offset;
 
     // Reset all state (matching a.java:147-183 e() method)
+    p->control_mask &= ~0xF;
     p->x_speed = 0;
     p->y_speed = 0;
     p->prev_y_speed = 0;
@@ -416,17 +412,21 @@ static void player_respawn(Player* p) {
     p->state_r = 0;
     p->carrier_object_index = -1;
 
-    // Reset sprite to base depending on original spawn ball size
-    p->sprite_index = p->spawn_is_large ? 11 : 0;
-    player_refresh_sprite_dims(p);
+    // Match a.java:e(): reset to sprite 0 first, then reapply large-ball form via a(11).
+    p->sprite_index = 0;
+    if (!player_refresh_sprite_dims(p)) return;
+    p->active_mask = player_masks_select(p->masks, p->sprite_index, &p->mask_w, &p->mask_h);
+    if (!p->active_mask || p->mask_w <= 0 || p->mask_h <= 0) return;
+    p->mask_half_w = p->mask_w / 2;
+    p->mask_half_h = p->mask_h / 2;
 
-    // If original spawn is "large ball", restore inverted state
     if (p->spawn_is_large) {
+        player_change_sprite(p, level, 11);
         p->is_inverted = true;
     }
 }
 
-static void player_finish_death_sequence(Player* p) {
+static void player_finish_death_sequence(Player* p, Level* level) {
     if (!p) return;
 
     // Match a.java: when the death timer ends with no lives remaining,
@@ -437,7 +437,7 @@ static void player_finish_death_sequence(Player* p) {
         return;
     }
 
-    player_respawn(p);
+    player_respawn(p, level);
 }
 
 // Match a.java:g() - right-side inflation state machine
@@ -554,12 +554,12 @@ static void player_trigger_squash(Player* p, Level* level, int sprite_delta) {
     p->stunned = true;
 }
 
-static void player_apply_state_c(Player* p) {
-    if (!p) return;
+static void player_apply_state_c(Player* p, Level* level) {
+    if (!p || !level) return;
     if (!p->is_stone && p->state_a == 0 && p->state_r == 0) {
         p->timer_a = 0;
         p->stunned = false;
-        p->sprite_index = p->is_inverted ? 11 : 0;
+        player_change_sprite(p, level, p->is_inverted ? 11 : 0);
     }
 }
 
@@ -581,8 +581,8 @@ static void player_apply_state_b(Player* p) {
     }
 }
 
-static void player_activate_stone_powerup(Player* p) {
-    if (!p) return;
+static void player_activate_stone_powerup(Player* p, Level* level) {
+    if (!p || !level) return;
 
     // Match a.java case 22: replaying the tile while already stone only
     // refreshes the stone timer and does not replay the inflate sound.
@@ -592,13 +592,13 @@ static void player_activate_stone_powerup(Player* p) {
     }
 
     sound_play(SND_INFLATE);
-    player_apply_state_c(p);
+    player_apply_state_c(p, level);
     player_apply_state_b(p);
 }
 
 static void player_apply_tile_break(Level* level, int tx, int ty) {
     if (!level) return;
-    level_set_tile(level, tx, ty, 105);
+    level_start_break_animation(level, tx, ty);
 }
 
 static void player_collect_tile(Player* p, Level* level, int tx, int ty, uint8_t tile_id) {
@@ -659,21 +659,21 @@ static void player_special_tile(Player* p, Level* level, int tx, int ty, uint8_t
     if (!p) return;
     switch (tile_id) {
         case 39:
-            sound_play(SND_POWERUP);
+            if (!p->has_speed_bonus) sound_play(SND_POWERUP);
             p->gravity_down = false;
             p->has_jump_bonus = false;
             p->has_speed_bonus = true;
             p->timer_b = 450;
             break;
         case 26:
-            sound_play(SND_POWERUP);
+            if (!p->has_jump_bonus) sound_play(SND_POWERUP);
             p->gravity_down = false;
             p->has_jump_bonus = true;
             p->has_speed_bonus = false;
             p->timer_b = 450;
             break;
         case 15:
-            sound_play(SND_POWERUP);
+            if (!p->gravity_down) sound_play(SND_POWERUP);
             p->gravity_down = true;
             p->has_jump_bonus = false;
             p->has_speed_bonus = false;
@@ -681,19 +681,19 @@ static void player_special_tile(Player* p, Level* level, int tx, int ty, uint8_t
             p->timer_b = 450;
             break;
         case 22:
-            player_activate_stone_powerup(p);
+            player_activate_stone_powerup(p, level);
             break;
         case 18:
             if (!p->is_inverted && !p->is_stone && p->state_a == 0) {
                 sound_play(SND_JUMP_UP);
-                player_apply_state_c(p);
+                player_apply_state_c(p, level);
                 player_apply_state_l(p);
             }
             break;
         case 11:
             if (p->is_inverted && !p->is_stone && p->state_a == 0) {
                 sound_play(SND_JUMP_DOWN);
-                player_apply_state_c(p);
+                player_apply_state_c(p, level);
                 player_apply_state_l(p);
             }
             break;
@@ -859,7 +859,7 @@ void player_update(Player* p, Level* level, Input* input) {
             p->timer_a--;
         }
         if (p->timer_a == 0 && p->is_dying) {
-            player_finish_death_sequence(p);
+            player_finish_death_sequence(p, level);
         }
         return; // Skip normal update while dying
     }
@@ -1211,7 +1211,6 @@ void player_update(Player* p, Level* level, Input* input) {
                         break;
                     case 4:
                     case 5:
-                    case 53:
                     case 114:
                     case 115:
                         // a.java:964 - reset prev_y_speed for non-corner slopes
@@ -1725,6 +1724,14 @@ void player_update(Player* p, Level* level, Input* input) {
                         // Java parity: collectible tiles are handled before direction-specific default logic.
                         player_collect_tile(p, level, tx, ty, id_logic);
                         break;
+                    case 11:
+                    case 15:
+                    case 18:
+                    case 22:
+                    case 26:
+                    case 39:
+                        player_special_tile(p, level, tx, ty, id_logic);
+                        /* Java falls through into default collision handling here. */
                     default:
                         j = 0;
                         if ((id_logic == 7 || id_logic == 8) && p->is_stone) {
@@ -1888,14 +1895,36 @@ void player_update(Player* p, Level* level, Input* input) {
                 case 114:
                     if (!p->gravity_down) {
                         int dy = -1;
-                                    if (!player_test_collision_mode(level,
+                        int active_object_index = -1;
+                        if (!player_test_collision_mode(level,
                                                         test_x - p->mask_half_w,
                                                         (p->y_pos + dy) - p->mask_half_h,
-                                                        p->mask_w, p->mask_h, p->active_mask, true, NULL)) {
+                                                        p->mask_w, p->mask_h, p->active_mask, true,
+                                                        &active_object_index)) {
                             p->x_pos = test_x;
                             p->y_pos += dy;
+                            collision_hits_clear(&hits);
+                            level_test_collision_collect(level,
+                                                         test_x - p->mask_half_w,
+                                                         p->y_pos - p->mask_half_h,
+                                                         p->mask_w, p->mask_h,
+                                                         p->active_mask,
+                                                         hits.x, hits.y, COLLISION_HITS_MAX,
+                                                         &hits.overflow,
+                                                         &active_object_index);
+                            p->carrier_object_index = active_object_index;
                         } else if (!p->has_grav_bonus || !p->is_inverted) {
                             p->y_pos += dy;
+                            collision_hits_clear(&hits);
+                            level_test_collision_collect(level,
+                                                         test_x - p->mask_half_w,
+                                                         p->y_pos - p->mask_half_h,
+                                                         p->mask_w, p->mask_h,
+                                                         p->active_mask,
+                                                         hits.x, hits.y, COLLISION_HITS_MAX,
+                                                         &hits.overflow,
+                                                         &active_object_index);
+                            p->carrier_object_index = active_object_index;
                             h = 0;
                         }
                     }
@@ -1906,14 +1935,36 @@ void player_update(Player* p, Level* level, Input* input) {
                 case 116:
                     if (p->gravity_down || (p->has_grav_bonus && p->is_inverted)) {
                         int dy = 1;
+                        int active_object_index = -1;
                         if (!player_test_collision_mode(level,
                                                         test_x - p->mask_half_w,
                                                         (p->y_pos + dy) - p->mask_half_h,
-                                                        p->mask_w, p->mask_h, p->active_mask, true, NULL)) {
+                                                        p->mask_w, p->mask_h, p->active_mask, true,
+                                                        &active_object_index)) {
                             p->x_pos = test_x;
                             p->y_pos += dy;
+                            collision_hits_clear(&hits);
+                            level_test_collision_collect(level,
+                                                         test_x - p->mask_half_w,
+                                                         p->y_pos - p->mask_half_h,
+                                                         p->mask_w, p->mask_h,
+                                                         p->active_mask,
+                                                         hits.x, hits.y, COLLISION_HITS_MAX,
+                                                         &hits.overflow,
+                                                         &active_object_index);
+                            p->carrier_object_index = active_object_index;
                         } else {
                             p->y_pos += dy;
+                            collision_hits_clear(&hits);
+                            level_test_collision_collect(level,
+                                                         test_x - p->mask_half_w,
+                                                         p->y_pos - p->mask_half_h,
+                                                         p->mask_w, p->mask_h,
+                                                         p->active_mask,
+                                                         hits.x, hits.y, COLLISION_HITS_MAX,
+                                                         &hits.overflow,
+                                                         &active_object_index);
+                            p->carrier_object_index = active_object_index;
                             h = 0;
                         }
                     }
@@ -2070,81 +2121,139 @@ void player_render(Player* p, SDL_Renderer* renderer, int camera_x, int camera_y
     }
 }
 
-void player_export_state(const Player* p, PlayerSaveState* out_state) {
+void player_export_rms_state(const Player* p, PlayerRmsState* out_state) {
     if (!p || !out_state) return;
 
     out_state->x_pos = p->x_pos;
     out_state->y_pos = p->y_pos;
+    out_state->spawn_tile_y = p->spawn_tile_y;
+    out_state->spawn_tile_x = p->spawn_tile_x;
     out_state->x_speed = p->x_speed;
     out_state->y_speed = p->y_speed;
-    out_state->prev_y_speed = p->prev_y_speed;
-    out_state->sprite_index = p->sprite_index;
-    out_state->is_large = p->is_large;
-    out_state->is_inverted = p->is_inverted;
-    out_state->is_stone = p->is_stone;
-    out_state->gravity_down = p->gravity_down;
-    out_state->is_grounded = p->is_grounded;
-    out_state->has_speed_bonus = p->has_speed_bonus;
-    out_state->has_jump_bonus = p->has_jump_bonus;
-    out_state->has_grav_bonus = p->has_grav_bonus;
-    out_state->stunned = p->stunned;
-    out_state->control_mask = p->control_mask;
     out_state->bounce_state = p->bounce_state;
-    out_state->timer_a = p->timer_a;
-    out_state->timer_b = p->timer_b;
+    out_state->prev_y_speed = p->prev_y_speed;
     out_state->stone_timer = p->stone_timer;
-    out_state->state_r = p->state_r;
+    out_state->timer_b = p->timer_b;
+    out_state->is_grounded = p->is_grounded;
+    out_state->is_stone = p->is_stone;
+    out_state->is_inverted = p->is_inverted;
+    out_state->gravity_down = p->gravity_down;
+    out_state->stunned = p->stunned;
     out_state->state_a = p->state_a;
-    out_state->carrier_object_index = p->carrier_object_index;
-    out_state->is_dying = p->is_dying;
-    out_state->spawn_tile_x = p->spawn_tile_x;
-    out_state->spawn_tile_y = p->spawn_tile_y;
-    out_state->spawn_is_large = p->spawn_is_large;
-    out_state->god_mode = p->god_mode;
-    out_state->lives = p->lives;
-    out_state->score = p->score;
+    out_state->state_r = p->state_r;
+    out_state->timer_a = p->timer_a;
+    out_state->sprite_index = p->sprite_index;
 }
 
-bool player_import_state(Player* p, const PlayerSaveState* state) {
-    if (!p || !state) return false;
+bool player_import_rms_state(Player* p, Level* level, const PlayerRmsState* state) {
+    if (!p || !level || !state) return false;
     if (state->sprite_index < 0 || state->sprite_index >= p->sprite_count) return false;
     if (!p->ball_sprites || !p->ball_sprites[state->sprite_index]) return false;
 
     p->x_pos = state->x_pos;
     p->y_pos = state->y_pos;
+    p->spawn_tile_y = state->spawn_tile_y;
+    p->spawn_tile_x = state->spawn_tile_x;
     p->x_speed = state->x_speed;
     p->y_speed = state->y_speed;
-    p->prev_y_speed = state->prev_y_speed;
-    p->sprite_index = state->sprite_index;
-    p->is_large = state->is_large;
-    p->is_inverted = state->is_inverted;
-    p->is_stone = state->is_stone;
-    p->gravity_down = state->gravity_down;
-    p->is_grounded = state->is_grounded;
-    p->has_speed_bonus = state->has_speed_bonus;
-    p->has_jump_bonus = state->has_jump_bonus;
-    p->has_grav_bonus = state->has_grav_bonus;
-    p->stunned = state->stunned;
-    p->control_mask = state->control_mask;
     p->bounce_state = state->bounce_state;
-    p->timer_a = state->timer_a;
-    p->timer_b = state->timer_b;
+    p->prev_y_speed = state->prev_y_speed;
     p->stone_timer = state->stone_timer;
-    p->state_r = state->state_r;
+    p->timer_b = state->timer_b;
+    p->is_grounded = state->is_grounded;
+    p->is_stone = state->is_stone;
+    p->is_inverted = state->is_inverted;
+    p->gravity_down = state->gravity_down;
+    p->stunned = state->stunned;
     p->state_a = state->state_a;
-    p->carrier_object_index = state->carrier_object_index;
-    p->is_dying = state->is_dying;
-    p->spawn_tile_x = state->spawn_tile_x;
-    p->spawn_tile_y = state->spawn_tile_y;
-    p->spawn_is_large = state->spawn_is_large;
-    p->god_mode = state->god_mode;
-    p->lives = state->lives;
-    p->score = state->score;
+    p->state_r = state->state_r;
+    p->timer_a = state->timer_a;
+    p->sprite_index = state->sprite_index;
+    p->god_mode = false;
+    p->prev_cheat_pressed = false;
 
-    if (!player_refresh_sprite_dims(p)) return false;
-    p->active_mask = player_masks_select(p->masks, p->sprite_index, &p->mask_w, &p->mask_h);
-    if (!p->active_mask || p->mask_w <= 0 || p->mask_h <= 0) return false;
-    p->mask_half_w = p->mask_w / 2;
-    p->mask_half_h = p->mask_h / 2;
+    {
+        int old_w = p->sprite_width;
+        int old_h = p->sprite_height;
+
+        if (!player_refresh_sprite_dims(p)) return false;
+        p->active_mask = player_masks_select(p->masks, p->sprite_index, &p->mask_w, &p->mask_h);
+        if (!p->active_mask || p->mask_w <= 0 || p->mask_h <= 0) return false;
+        p->mask_half_w = p->mask_w / 2;
+        p->mask_half_h = p->mask_h / 2;
+
+        if (!level_test_collision(level,
+                p->x_pos - p->mask_half_w, p->y_pos - p->mask_half_h,
+                p->mask_w, p->mask_h, p->active_mask)) {
+            return true;
+        }
+
+        int w_delta = abs(p->sprite_width - old_w) + 1;
+        int h_delta = abs(p->sprite_height - old_h) + 1;
+
+        for (int dx = 1; dx <= w_delta; dx++) {
+            if (!level_test_collision(level,
+                                p->x_pos + dx - p->mask_half_w, p->y_pos - p->mask_half_h,
+                                p->mask_w, p->mask_h, p->active_mask)) {
+                p->x_pos += dx;
+                return true;
+            }
+            if (!level_test_collision(level,
+                                p->x_pos - dx - p->mask_half_w, p->y_pos - p->mask_half_h,
+                                p->mask_w, p->mask_h, p->active_mask)) {
+                p->x_pos -= dx;
+                return true;
+            }
+        }
+
+        for (int dy = 1; dy <= h_delta; dy++) {
+            if (!level_test_collision(level,
+                                p->x_pos - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
+                                p->mask_w, p->mask_h, p->active_mask)) {
+                p->y_pos += dy;
+                return true;
+            }
+            if (!level_test_collision(level,
+                                p->x_pos - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
+                                p->mask_w, p->mask_h, p->active_mask)) {
+                p->y_pos -= dy;
+                return true;
+            }
+        }
+
+        for (int dy = 1; dy <= h_delta; dy++) {
+            for (int dx = 1; dx <= w_delta; dx++) {
+                if (!level_test_collision(level,
+                                    p->x_pos + dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
+                                    p->mask_w, p->mask_h, p->active_mask)) {
+                    p->x_pos += dx;
+                    p->y_pos += dy;
+                    return true;
+                }
+                if (!level_test_collision(level,
+                                    p->x_pos + dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
+                                    p->mask_w, p->mask_h, p->active_mask)) {
+                    p->x_pos += dx;
+                    p->y_pos -= dy;
+                    return true;
+                }
+                if (!level_test_collision(level,
+                                    p->x_pos - dx - p->mask_half_w, p->y_pos + dy - p->mask_half_h,
+                                    p->mask_w, p->mask_h, p->active_mask)) {
+                    p->x_pos -= dx;
+                    p->y_pos += dy;
+                    return true;
+                }
+                if (!level_test_collision(level,
+                                    p->x_pos - dx - p->mask_half_w, p->y_pos - dy - p->mask_half_h,
+                                    p->mask_w, p->mask_h, p->active_mask)) {
+                    p->x_pos -= dx;
+                    p->y_pos -= dy;
+                    return true;
+                }
+            }
+        }
+    }
+
     return true;
 }

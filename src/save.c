@@ -1,5 +1,6 @@
 #include "save.h"
 
+#include "debug_log.h"
 #include "endian_utils.h"
 
 #include <pspdisplay.h>
@@ -11,11 +12,17 @@
 #include <string.h>
 
 #define SAVE_MAGIC 0x42425356u /* BBSV */
-#define SAVE_VERSION 2u
+#define SAVE_VERSION 0u
 #define SAVE_GAME_NAME "BBACK0001"
 #define SAVE_NAME "0000"
 #define SAVE_FILE_NAME "DATA.BIN"
 #define SAVE_ERR_RW_NO_DATA 0x80110327
+
+typedef struct {
+    uint16_t row;
+    uint16_t col;
+    uint8_t tile;
+} SavedTileEntry;
 
 typedef struct {
     uint32_t magic;
@@ -31,12 +38,13 @@ typedef struct {
     int continue_total_score;
     uint32_t continue_level_elapsed_ms;
     bool continue_one_go;
-    PlayerSaveState player;
-    uint8_t* tile_map;
-    size_t tile_map_size;
-    int level_width;
-    int level_height;
+    int current_level_score;
+    int door_i;
+    bool door_open;
+    PlayerRmsState player;
     int hoops_remaining;
+    SavedTileEntry* modified_tiles;
+    int modified_tile_count;
     int object_count;
     int (*object_ag)[2];
     int8_t (*object_s)[2];
@@ -47,10 +55,83 @@ static bool g_save_initialized = false;
 static bool g_save_dirty = false;
 static int g_save_last_load_result = 0;
 static int g_save_last_save_result = 0;
+static size_t g_save_last_loaded_size = 0;
+
+static const char* save_continue_state_name(SaveContinueState state) {
+    switch (state) {
+        case SAVE_CONTINUE_NONE: return "NONE";
+        case SAVE_CONTINUE_GAME: return "GAME";
+        case SAVE_CONTINUE_LEVEL_COMPLETE: return "LEVEL_COMPLETE";
+        default: return "UNKNOWN";
+    }
+}
+
+static void save_log_snapshot(const char* tag, size_t blob_size) {
+    if (!g_debug_log) return;
+    fprintf(g_debug_log,
+            "[save] %s blob=%lu state=%s level=%d lives=%d levels_done=%d total_score=%d "
+            "elapsed_ms=%lu one_go=%d level_score=%d door_I=%d door_open=%d hoops=%d "
+            "modified_tiles=%d objects=%d player={x=%d y=%d spawn_x=%d spawn_y=%d x_speed=%d y_speed=%d "
+            "bounce=%d prev_y=%d stone_timer=%d timer_a=%d timer_b=%d grounded=%d stone=%d inverted=%d gravity_down=%d "
+            "stunned=%d state_a=%d state_r=%d sprite=%d}\n",
+            tag,
+            (unsigned long)blob_size,
+            save_continue_state_name(g_save.continue_state),
+            g_save.continue_level_index,
+            g_save.continue_lives,
+            g_save.continue_levels_done,
+            g_save.continue_total_score,
+            (unsigned long)g_save.continue_level_elapsed_ms,
+            g_save.continue_one_go ? 1 : 0,
+            g_save.current_level_score,
+            g_save.door_i,
+            g_save.door_open ? 1 : 0,
+            g_save.hoops_remaining,
+            g_save.modified_tile_count,
+            g_save.object_count,
+            g_save.player.x_pos,
+            g_save.player.y_pos,
+            g_save.player.spawn_tile_x,
+            g_save.player.spawn_tile_y,
+            g_save.player.x_speed,
+            g_save.player.y_speed,
+            g_save.player.bounce_state,
+            g_save.player.prev_y_speed,
+            g_save.player.stone_timer,
+            g_save.player.timer_a,
+            g_save.player.timer_b,
+            g_save.player.is_grounded ? 1 : 0,
+            g_save.player.is_stone ? 1 : 0,
+            g_save.player.is_inverted ? 1 : 0,
+            g_save.player.gravity_down ? 1 : 0,
+            g_save.player.stunned ? 1 : 0,
+            g_save.player.state_a,
+            g_save.player.state_r,
+            g_save.player.sprite_index);
+    fflush(g_debug_log);
+}
+
+static bool save_unpack_fail(const char* reason, size_t offset, size_t size) {
+    if (g_debug_log) {
+        fprintf(g_debug_log,
+                "[save] load.unpack_failed reason=%s offset=%lu size=%lu\n",
+                reason,
+                (unsigned long)offset,
+                (unsigned long)size);
+        fflush(g_debug_log);
+    }
+    return false;
+}
 
 static void write_u8(uint8_t** p, uint8_t v) {
     (*p)[0] = v;
     *p += 1;
+}
+
+static void write_be16(uint8_t** p, uint16_t v) {
+    (*p)[0] = (uint8_t)(v >> 8);
+    (*p)[1] = (uint8_t)(v);
+    *p += 2;
 }
 
 static void write_be32(uint8_t** p, uint32_t v) {
@@ -67,18 +148,25 @@ static uint8_t read_u8(const uint8_t** p) {
     return v;
 }
 
+static uint16_t read_be16(const uint8_t** p) {
+    uint16_t v = (uint16_t)(((uint16_t)(*p)[0] << 8) | (uint16_t)(*p)[1]);
+    *p += 2;
+    return v;
+}
+
 static void save_state_free_runtime(void) {
-    free(g_save.tile_map);
-    g_save.tile_map = NULL;
-    g_save.tile_map_size = 0;
+    free(g_save.modified_tiles);
+    g_save.modified_tiles = NULL;
+    g_save.modified_tile_count = 0;
     free(g_save.object_ag);
     g_save.object_ag = NULL;
     free(g_save.object_s);
     g_save.object_s = NULL;
     g_save.object_count = 0;
-    g_save.level_width = 0;
-    g_save.level_height = 0;
     g_save.hoops_remaining = 0;
+    g_save.current_level_score = 0;
+    g_save.door_i = 0;
+    g_save.door_open = false;
 }
 
 static void save_state_reset_defaults(void) {
@@ -99,6 +187,116 @@ static void save_state_reset_defaults(void) {
     g_save.continue_one_go = false;
 }
 
+static bool save_should_capture_tile(uint8_t tile_id) {
+    switch (tile_id) {
+        case 7:
+        case 8:
+        case 12:
+        case 30:
+        case 34:
+        case 35:
+        case 93:
+        case 94:
+        case 95:
+        case 96:
+        case 97:
+        case 98:
+        case 99:
+        case 100:
+        case 101:
+        case 102:
+        case 103:
+        case 104:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool save_should_restore_tile(uint8_t tile_id) {
+    if (tile_id == 35) return false;
+    return save_should_capture_tile(tile_id);
+}
+
+static int save_count_modified_tiles(const Level* level) {
+    int count = 0;
+
+    if (!level || !level->tile_map) return 0;
+    for (int row = 0; row < (int)level->height; row++) {
+        for (int col = 0; col < (int)level->width; col++) {
+            uint8_t tile = level->tile_map[(size_t)row * (size_t)level->width + (size_t)col];
+            if (save_should_capture_tile(tile & 0x7F)) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+static void save_capture_modified_tiles(const Level* level, SavedTileEntry* entries) {
+    int index = 0;
+
+    if (!level || !level->tile_map || !entries) return;
+    for (int row = 0; row < (int)level->height; row++) {
+        for (int col = 0; col < (int)level->width; col++) {
+            uint8_t tile = level->tile_map[(size_t)row * (size_t)level->width + (size_t)col];
+            if (!save_should_capture_tile(tile & 0x7F)) continue;
+            entries[index].row = (uint16_t)row;
+            entries[index].col = (uint16_t)col;
+            entries[index].tile = tile;
+            index++;
+        }
+    }
+}
+
+static const SavedTileEntry* save_find_modified_tile(const SaveState* save, int row, int col) {
+    if (!save || !save->modified_tiles) return NULL;
+    for (int i = 0; i < save->modified_tile_count; i++) {
+        const SavedTileEntry* entry = &save->modified_tiles[i];
+        if ((int)entry->row == row && (int)entry->col == col) {
+            return entry;
+        }
+    }
+    return NULL;
+}
+
+static void save_capture_runtime_snapshot(const Level* level,
+                                          const Player* player,
+                                          const ExitDoorState* door) {
+    if (!level || !player || !level->tile_map) return;
+
+    player_export_rms_state(player, &g_save.player);
+    g_save.current_level_score = player->score;
+    g_save.door_i = door ? door->I : 0;
+    g_save.door_open = door ? door->open : false;
+    g_save.hoops_remaining = level->hoops_remaining;
+    g_save.modified_tile_count = save_count_modified_tiles(level);
+    if (g_save.modified_tile_count > 0) {
+        g_save.modified_tiles = (SavedTileEntry*)calloc((size_t)g_save.modified_tile_count, sizeof(SavedTileEntry));
+        if (g_save.modified_tiles) {
+            save_capture_modified_tiles(level, g_save.modified_tiles);
+        } else {
+            g_save.modified_tile_count = 0;
+        }
+    }
+
+    g_save.object_count = level->objects.count;
+    if (g_save.object_count > 0) {
+        g_save.object_ag = (int(*)[2])calloc((size_t)g_save.object_count, sizeof(int[2]));
+        g_save.object_s = (int8_t(*)[2])calloc((size_t)g_save.object_count, sizeof(int8_t[2]));
+        if (g_save.object_ag && g_save.object_s) {
+            memcpy(g_save.object_ag, level->objects.ag, (size_t)g_save.object_count * sizeof(int[2]));
+            memcpy(g_save.object_s, level->objects.s, (size_t)g_save.object_count * sizeof(int8_t[2]));
+        } else {
+            free(g_save.object_ag);
+            free(g_save.object_s);
+            g_save.object_ag = NULL;
+            g_save.object_s = NULL;
+            g_save.object_count = 0;
+        }
+    }
+}
+
 static size_t save_payload_size(void) {
     size_t size = 0;
     size += 4 + 4 + 4 + 1 + 1 + 2;
@@ -106,79 +304,61 @@ static size_t save_payload_size(void) {
     size += 1 + 3;
     size += 4 + 4 + 4 + 4 + 4;
     size += 1 + 3;
-    size += 30 * 4;
+    size += 10 * 4; /* D i n H s h G z b B */
+    size += 5;      /* x F I p q */
+    size += 2;      /* a r */
+    size += 4 + 4;  /* A g */
     if (g_save.continue_state == SAVE_CONTINUE_GAME) {
-        size += 4 + 4 + 4 + 4;
-        size += g_save.tile_map_size;
+        size += 4 + 4 + 1 + 4 + 1 + 4;
+        size += (size_t)g_save.modified_tile_count * 5;
         size += (size_t)g_save.object_count * (4 + 4 + 1 + 1);
     }
     return size;
 }
 
-static void save_pack_player(uint8_t** p, const PlayerSaveState* s) {
+static void save_pack_player(uint8_t** p, const PlayerRmsState* s) {
     write_be32(p, (uint32_t)s->x_pos);
     write_be32(p, (uint32_t)s->y_pos);
+    write_be32(p, (uint32_t)s->spawn_tile_y);
+    write_be32(p, (uint32_t)s->spawn_tile_x);
     write_be32(p, (uint32_t)s->x_speed);
     write_be32(p, (uint32_t)s->y_speed);
-    write_be32(p, (uint32_t)s->prev_y_speed);
-    write_be32(p, (uint32_t)s->sprite_index);
-    write_be32(p, (uint32_t)s->is_large);
-    write_be32(p, (uint32_t)s->is_inverted);
-    write_be32(p, (uint32_t)s->is_stone);
-    write_be32(p, (uint32_t)s->gravity_down);
-    write_be32(p, (uint32_t)s->is_grounded);
-    write_be32(p, (uint32_t)s->has_speed_bonus);
-    write_be32(p, (uint32_t)s->has_jump_bonus);
-    write_be32(p, (uint32_t)s->has_grav_bonus);
-    write_be32(p, (uint32_t)s->stunned);
-    write_be32(p, (uint32_t)s->control_mask);
     write_be32(p, (uint32_t)s->bounce_state);
-    write_be32(p, (uint32_t)s->timer_a);
-    write_be32(p, (uint32_t)s->timer_b);
+    write_be32(p, (uint32_t)s->prev_y_speed);
     write_be32(p, (uint32_t)s->stone_timer);
-    write_be32(p, (uint32_t)s->state_r);
-    write_be32(p, (uint32_t)s->state_a);
-    write_be32(p, (uint32_t)s->carrier_object_index);
-    write_be32(p, (uint32_t)s->is_dying);
-    write_be32(p, (uint32_t)s->spawn_tile_x);
-    write_be32(p, (uint32_t)s->spawn_tile_y);
-    write_be32(p, (uint32_t)s->spawn_is_large);
-    write_be32(p, (uint32_t)s->god_mode);
-    write_be32(p, (uint32_t)s->lives);
-    write_be32(p, (uint32_t)s->score);
+    write_be32(p, (uint32_t)s->timer_b);
+    write_u8(p, s->is_grounded ? 1 : 0);
+    write_u8(p, s->is_stone ? 1 : 0);
+    write_u8(p, s->is_inverted ? 1 : 0);
+    write_u8(p, s->gravity_down ? 1 : 0);
+    write_u8(p, s->stunned ? 1 : 0);
+    write_u8(p, (uint8_t)s->state_a);
+    write_u8(p, (uint8_t)s->state_r);
+    write_be32(p, (uint32_t)s->timer_a);
+    write_be32(p, (uint32_t)s->sprite_index);
 }
 
-static void save_unpack_player(const uint8_t** p, PlayerSaveState* s) {
+static void save_unpack_player(const uint8_t** p, PlayerRmsState* s) {
+    memset(s, 0, sizeof(*s));
     s->x_pos = (int)endian_read_be32_advance(p);
     s->y_pos = (int)endian_read_be32_advance(p);
+    s->spawn_tile_y = (int)endian_read_be32_advance(p);
+    s->spawn_tile_x = (int)endian_read_be32_advance(p);
     s->x_speed = (int)endian_read_be32_advance(p);
     s->y_speed = (int)endian_read_be32_advance(p);
-    s->prev_y_speed = (int)endian_read_be32_advance(p);
-    s->sprite_index = (int)endian_read_be32_advance(p);
-    s->is_large = endian_read_be32_advance(p) != 0;
-    s->is_inverted = endian_read_be32_advance(p) != 0;
-    s->is_stone = endian_read_be32_advance(p) != 0;
-    s->gravity_down = endian_read_be32_advance(p) != 0;
-    s->is_grounded = endian_read_be32_advance(p) != 0;
-    s->has_speed_bonus = endian_read_be32_advance(p) != 0;
-    s->has_jump_bonus = endian_read_be32_advance(p) != 0;
-    s->has_grav_bonus = endian_read_be32_advance(p) != 0;
-    s->stunned = endian_read_be32_advance(p) != 0;
-    s->control_mask = (int)endian_read_be32_advance(p);
     s->bounce_state = (int)endian_read_be32_advance(p);
-    s->timer_a = (int)endian_read_be32_advance(p);
-    s->timer_b = (int)endian_read_be32_advance(p);
+    s->prev_y_speed = (int)endian_read_be32_advance(p);
     s->stone_timer = (int)endian_read_be32_advance(p);
-    s->state_r = (int)endian_read_be32_advance(p);
-    s->state_a = (int)endian_read_be32_advance(p);
-    s->carrier_object_index = (int)endian_read_be32_advance(p);
-    s->is_dying = endian_read_be32_advance(p) != 0;
-    s->spawn_tile_x = (int)endian_read_be32_advance(p);
-    s->spawn_tile_y = (int)endian_read_be32_advance(p);
-    s->spawn_is_large = endian_read_be32_advance(p) != 0;
-    s->god_mode = endian_read_be32_advance(p) != 0;
-    s->lives = (int)endian_read_be32_advance(p);
-    s->score = (int)endian_read_be32_advance(p);
+    s->timer_b = (int)endian_read_be32_advance(p);
+    s->is_grounded = read_u8(p) != 0;
+    s->is_stone = read_u8(p) != 0;
+    s->is_inverted = read_u8(p) != 0;
+    s->gravity_down = read_u8(p) != 0;
+    s->stunned = read_u8(p) != 0;
+    s->state_a = (int8_t)read_u8(p);
+    s->state_r = (int8_t)read_u8(p);
+    s->timer_a = (int)endian_read_be32_advance(p);
+    s->sprite_index = (int)endian_read_be32_advance(p);
 }
 
 static bool save_store_data_buffer(const void* data_buf, size_t data_size);
@@ -219,14 +399,17 @@ static bool save_pack_blob(uint8_t** out_buf, size_t* out_size) {
     save_pack_player(&p, &g_save.player);
 
     if (g_save.continue_state == SAVE_CONTINUE_GAME) {
-        write_be32(&p, (uint32_t)g_save.level_width);
-        write_be32(&p, (uint32_t)g_save.level_height);
+        write_be32(&p, (uint32_t)g_save.current_level_score);
+        write_be32(&p, (uint32_t)g_save.door_i);
+        write_u8(&p, g_save.door_open ? 1 : 0);
         write_be32(&p, (uint32_t)g_save.hoops_remaining);
-        write_be32(&p, (uint32_t)g_save.object_count);
-        if (g_save.tile_map_size > 0 && g_save.tile_map) {
-            memcpy(p, g_save.tile_map, g_save.tile_map_size);
-            p += g_save.tile_map_size;
+        write_u8(&p, (uint8_t)g_save.modified_tile_count);
+        for (int i = 0; i < g_save.modified_tile_count; i++) {
+            write_be16(&p, g_save.modified_tiles[i].row);
+            write_be16(&p, g_save.modified_tiles[i].col);
+            write_u8(&p, g_save.modified_tiles[i].tile);
         }
+        write_be32(&p, (uint32_t)g_save.object_count);
         for (int i = 0; i < g_save.object_count; i++) {
             write_be32(&p, (uint32_t)g_save.object_ag[i][0]);
             write_be32(&p, (uint32_t)g_save.object_ag[i][1]);
@@ -246,12 +429,12 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
     uint32_t magic;
     uint32_t version;
 
-    if (!buf || size < 4 + 4) return false;
+    if (!buf || size < 4 + 4) return save_unpack_fail("header_too_small", 0, size);
 
     save_state_free_runtime();
     magic = endian_read_be32_advance(&p);
     version = endian_read_be32_advance(&p);
-    if (magic != SAVE_MAGIC || version != SAVE_VERSION) return false;
+    if (magic != SAVE_MAGIC) return save_unpack_fail("bad_magic", (size_t)(p - buf), size);
 
     g_save.magic = magic;
     g_save.version = version;
@@ -272,35 +455,40 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
     g_save.continue_levels_done = (int)endian_read_be32_advance(&p);
     g_save.continue_total_score = (int)endian_read_be32_advance(&p);
     g_save.continue_level_elapsed_ms = endian_read_be32_advance(&p);
-    if (version >= 2) {
-        g_save.continue_one_go = read_u8(&p) != 0;
-        (void)read_u8(&p);
-        (void)read_u8(&p);
-        (void)read_u8(&p);
-    } else {
-        g_save.continue_one_go = false;
-    }
+    g_save.continue_one_go = read_u8(&p) != 0;
+    (void)read_u8(&p);
+    (void)read_u8(&p);
+    (void)read_u8(&p);
     save_unpack_player(&p, &g_save.player);
 
     if (g_save.continue_state == SAVE_CONTINUE_GAME) {
-        g_save.level_width = (int)endian_read_be32_advance(&p);
-        g_save.level_height = (int)endian_read_be32_advance(&p);
+        g_save.current_level_score = (int)endian_read_be32_advance(&p);
+        g_save.door_i = (int)endian_read_be32_advance(&p);
+        g_save.door_open = read_u8(&p) != 0;
         g_save.hoops_remaining = (int)endian_read_be32_advance(&p);
+        g_save.modified_tile_count = (int)read_u8(&p);
+        if (g_save.modified_tile_count < 0) return save_unpack_fail("negative_modified_tile_count", (size_t)(p - buf), size);
+        if (g_save.modified_tile_count > 0) {
+            if (p + (size_t)g_save.modified_tile_count * 5 > end) {
+                return save_unpack_fail("modified_tiles_overflow", (size_t)(p - buf), size);
+            }
+            g_save.modified_tiles = (SavedTileEntry*)calloc((size_t)g_save.modified_tile_count, sizeof(SavedTileEntry));
+            if (!g_save.modified_tiles) return save_unpack_fail("modified_tiles_alloc", (size_t)(p - buf), size);
+            for (int i = 0; i < g_save.modified_tile_count; i++) {
+                g_save.modified_tiles[i].row = read_be16(&p);
+                g_save.modified_tiles[i].col = read_be16(&p);
+                g_save.modified_tiles[i].tile = read_u8(&p);
+            }
+        }
         g_save.object_count = (int)endian_read_be32_advance(&p);
-        if (g_save.level_width <= 0 || g_save.level_height <= 0 || g_save.object_count < 0) return false;
-        g_save.tile_map_size = (size_t)g_save.level_width * (size_t)g_save.level_height;
-        if (p + g_save.tile_map_size > end) return false;
-        g_save.tile_map = (uint8_t*)malloc(g_save.tile_map_size);
-        if (!g_save.tile_map) return false;
-        memcpy(g_save.tile_map, p, g_save.tile_map_size);
-        p += g_save.tile_map_size;
+        if (g_save.object_count < 0) return save_unpack_fail("negative_object_count", (size_t)(p - buf), size);
         if (g_save.object_count > 0) {
             g_save.object_ag = (int(*)[2])calloc((size_t)g_save.object_count, sizeof(int[2]));
             g_save.object_s = (int8_t(*)[2])calloc((size_t)g_save.object_count, sizeof(int8_t[2]));
-            if (!g_save.object_ag || !g_save.object_s) return false;
+            if (!g_save.object_ag || !g_save.object_s) return save_unpack_fail("object_arrays_alloc", (size_t)(p - buf), size);
         }
         for (int i = 0; i < g_save.object_count; i++) {
-            if (p + 10 > end) return false;
+            if (p + 10 > end) return save_unpack_fail("object_data_overflow", (size_t)(p - buf), size);
             g_save.object_ag[i][0] = (int)endian_read_be32_advance(&p);
             g_save.object_ag[i][1] = (int)endian_read_be32_advance(&p);
             g_save.object_s[i][0] = (int8_t)read_u8(&p);
@@ -308,6 +496,7 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
         }
     }
 
+    save_log_snapshot("load.ok", size);
     return true;
 }
 
@@ -366,6 +555,7 @@ static bool save_do_utility(int mode, void* data_buf, size_t data_size) {
 
     if (mode == SCE_UTILITY_SAVEDATA_READDATA) {
         g_save_last_load_result = dialog.base.result;
+        g_save_last_loaded_size = (dialog.base.result == 0) ? (size_t)dialog.dataSize : 0;
     } else {
         g_save_last_save_result = dialog.base.result;
     }
@@ -395,8 +585,29 @@ int save_init(void) {
     if (!buf) return 0;
 
     if (save_load_data(buf, buf_size)) {
-        if (!save_unpack_blob(buf, buf_size)) {
+        size_t loaded_size = g_save_last_loaded_size;
+        if (loaded_size == 0 || loaded_size > buf_size) {
+            loaded_size = buf_size;
+        }
+        if (!save_unpack_blob(buf, loaded_size)) {
+            if (g_debug_log) {
+                fprintf(g_debug_log,
+                        "[save] load.parse_failed loaded_size=%lu result=0x%08X\n",
+                        (unsigned long)loaded_size,
+                        (unsigned)g_save_last_load_result);
+                fflush(g_debug_log);
+            }
             save_state_reset_defaults();
+            g_save_initialized = true;
+            g_save_dirty = true;
+            save_flush();
+            g_save_initialized = false;
+        } else if (g_debug_log) {
+            fprintf(g_debug_log,
+                    "[save] load.found loaded_size=%lu result=0x%08X\n",
+                    (unsigned long)loaded_size,
+                    (unsigned)g_save_last_load_result);
+            fflush(g_debug_log);
         }
         g_save_initialized = true;
         free(buf);
@@ -404,6 +615,10 @@ int save_init(void) {
     }
 
     if (g_save_last_load_result == (int)SAVE_ERR_RW_NO_DATA) {
+        if (g_debug_log) {
+            fprintf(g_debug_log, "[save] load.no_data result=0x%08X\n", (unsigned)g_save_last_load_result);
+            fflush(g_debug_log);
+        }
         g_save_initialized = true;
         g_save_dirty = true;
         save_flush();
@@ -412,6 +627,10 @@ int save_init(void) {
     }
 
     free(buf);
+    if (g_debug_log) {
+        fprintf(g_debug_log, "[save] load.failed result=0x%08X\n", (unsigned)g_save_last_load_result);
+        fflush(g_debug_log);
+    }
     save_state_reset_defaults();
     return 0;
 }
@@ -429,8 +648,22 @@ void save_flush(void) {
 
     if (!g_save_initialized || !g_save_dirty) return;
     if (!save_pack_blob(&buf, &size)) return;
+    save_log_snapshot("store.begin", size);
     if (save_store_data_buffer(buf, size)) {
         g_save_dirty = false;
+        if (g_debug_log) {
+            fprintf(g_debug_log,
+                    "[save] store.ok blob=%lu result=0x%08X\n",
+                    (unsigned long)size,
+                    (unsigned)g_save_last_save_result);
+            fflush(g_debug_log);
+        }
+    } else if (g_debug_log) {
+        fprintf(g_debug_log,
+                "[save] store.failed blob=%lu result=0x%08X\n",
+                (unsigned long)size,
+                (unsigned)g_save_last_save_result);
+        fflush(g_debug_log);
     }
     free(buf);
 }
@@ -473,7 +706,8 @@ void save_capture_game(int level_index,
                        bool one_go_run,
                        uint32_t level_elapsed_ms,
                        const Level* level,
-                       const Player* player) {
+                       const Player* player,
+                       const ExitDoorState* door) {
     if (!g_save_initialized || !level || !player || !level->tile_map) return;
 
     save_state_free_runtime();
@@ -484,26 +718,7 @@ void save_capture_game(int level_index,
     g_save.continue_total_score = total_score;
     g_save.continue_level_elapsed_ms = level_elapsed_ms;
     g_save.continue_one_go = one_go_run;
-    player_export_state(player, &g_save.player);
-
-    g_save.level_width = (int)level->width;
-    g_save.level_height = (int)level->height;
-    g_save.hoops_remaining = level->hoops_remaining;
-    g_save.tile_map_size = (size_t)level->width * (size_t)level->height;
-    g_save.tile_map = (uint8_t*)malloc(g_save.tile_map_size);
-    if (g_save.tile_map && g_save.tile_map_size > 0) {
-        memcpy(g_save.tile_map, level->tile_map, g_save.tile_map_size);
-    }
-
-    g_save.object_count = level->objects.count;
-    if (g_save.object_count > 0) {
-        g_save.object_ag = (int(*)[2])calloc((size_t)g_save.object_count, sizeof(int[2]));
-        g_save.object_s = (int8_t(*)[2])calloc((size_t)g_save.object_count, sizeof(int8_t[2]));
-        if (g_save.object_ag && g_save.object_s) {
-            memcpy(g_save.object_ag, level->objects.ag, (size_t)g_save.object_count * sizeof(int[2]));
-            memcpy(g_save.object_s, level->objects.s, (size_t)g_save.object_count * sizeof(int8_t[2]));
-        }
-    }
+    save_capture_runtime_snapshot(level, player, door);
 
     g_save_dirty = true;
 }
@@ -512,10 +727,12 @@ void save_capture_level_complete(int level_index,
                                  int lives,
                                  int levels_done,
                                  int total_score,
-                                 bool one_go_run) {
+                                 bool one_go_run,
+                                 const Level* level,
+                                 const Player* player,
+                                 const ExitDoorState* door) {
     if (!g_save_initialized) return;
     save_state_free_runtime();
-    memset(&g_save.player, 0, sizeof(g_save.player));
     g_save.continue_state = SAVE_CONTINUE_LEVEL_COMPLETE;
     g_save.continue_level_index = level_index;
     g_save.continue_lives = lives;
@@ -523,6 +740,11 @@ void save_capture_level_complete(int level_index,
     g_save.continue_total_score = total_score;
     g_save.continue_level_elapsed_ms = 0;
     g_save.continue_one_go = one_go_run;
+    if (level && player) {
+        save_capture_runtime_snapshot(level, player, door);
+    } else {
+        memset(&g_save.player, 0, sizeof(g_save.player));
+    }
     g_save_dirty = true;
 }
 
@@ -540,20 +762,35 @@ void save_clear_continue(void) {
     g_save_dirty = true;
 }
 
-bool save_restore_game(Level* level, Player* player) {
-    if (!level || !player) return false;
+bool save_restore_game(Level* level, Player* player, ExitDoorState* door) {
+    if (!level || !player || !door) return false;
     if (g_save.continue_state != SAVE_CONTINUE_GAME) return false;
-    if ((int)level->width != g_save.level_width || (int)level->height != g_save.level_height) return false;
     if (level->objects.count != g_save.object_count) return false;
-    if (!level->tile_map || !g_save.tile_map) return false;
+    if (!level->tile_map) return false;
 
-    memcpy(level->tile_map, g_save.tile_map, g_save.tile_map_size);
+    for (int row = 0; row < (int)level->height; row++) {
+        for (int col = 0; col < (int)level->width; col++) {
+            size_t index = (size_t)row * (size_t)level->width + (size_t)col;
+            uint8_t tile = level->tile_map[index];
+            uint8_t tile_id = tile & 0x7F;
+
+            if (!save_should_restore_tile(tile_id)) continue;
+
+            const SavedTileEntry* entry = save_find_modified_tile(&g_save, row, col);
+            level->tile_map[index] = entry ? entry->tile : (uint8_t)(tile & 0x80);
+        }
+    }
     level->hoops_remaining = g_save.hoops_remaining;
     if (g_save.object_count > 0) {
         memcpy(level->objects.ag, g_save.object_ag, (size_t)g_save.object_count * sizeof(int[2]));
         memcpy(level->objects.s, g_save.object_s, (size_t)g_save.object_count * sizeof(int8_t[2]));
     }
-    return player_import_state(player, &g_save.player);
+    door->I = g_save.door_i;
+    door->open = g_save.door_open;
+    if (!player_import_rms_state(player, level, &g_save.player)) return false;
+    player->lives = g_save.continue_lives;
+    player->score = g_save.current_level_score;
+    return true;
 }
 
 void save_update_unlocked_level(int unlocked_level) {

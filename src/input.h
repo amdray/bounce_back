@@ -40,6 +40,6 @@ typedef struct {
 void input_init(void);
 void input_cleanup(void);
 void input_update(Input* input);
+void input_sync(Input* input);
 
 #endif // INPUT_H
-
