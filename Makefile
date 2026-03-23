@@ -3,7 +3,7 @@ OBJS = src/main.o src/resource_loader.o src/level_loader.o src/tile_metadata.o s
 
 # ---- Release folder setup ----
 RELEASE_DIR = release
-ORIGINAL_RES_DIR ?= original_code/bounce_back_s60.jar.src/res
+ORIGINAL_RES_DIR ?= res
 
 # SDL2 libraries for PSP (порядок важен!)
 LIBS = -lSDL2main -lSDL2_image -lSDL2 -ljpeg -lpng -lz -lGL -lpspvram -lpspgu -lpspge -lpspaudio -lpsppower -lpsphprm -lpspirkeyb -lm -lpspvfpu
@@ -41,8 +41,8 @@ default: $(EXTRA_TARGETS)
 	@echo "Creating release folder..."
 	@mkdir -p $(RELEASE_DIR)
 	@if [ ! -d "$(ORIGINAL_RES_DIR)" ]; then \
-		echo "ERROR: missing '$(ORIGINAL_RES_DIR)' (original resources)."; \
-		echo "Put original resources under original_code and re-run make, or override ORIGINAL_RES_DIR."; \
+		echo "ERROR: missing '$(ORIGINAL_RES_DIR)' (resource directory)."; \
+		echo "Commit or restore ./res, or override ORIGINAL_RES_DIR=/path/to/res and re-run make."; \
 		exit 1; \
 	fi
 	@rsync -ru --size-only "$(ORIGINAL_RES_DIR)/" "$(RELEASE_DIR)/res/"

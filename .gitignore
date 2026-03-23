@@ -27,7 +27,7 @@ build/
 # Local scratch
 _ul
 
-# Reverse engineering sources (local only)
+# Reverse engineering sources (local only; tracked build resources live in ./res)
 original_code/
 
 # Build outputs (local)
@@ -37,7 +37,7 @@ PARAM.SFO
 *.o
 *.elf
 
-# Keep original resources in one place (local only)
+# Local-only resource mirrors / scratch
 src/res/
 original_code/
 other/
