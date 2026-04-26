@@ -11,10 +11,7 @@ typedef struct {
     int num_lives;
     int total_rings;
     int num_rings;
-    int speed_bonus_counter;
-    int grav_bonus_counter;
-    int jump_bonus_counter;
-    int stone_bonus_counter;
+    int bonus_counter;
 } HudState;
 
 int hud_init(SDL_Renderer* renderer, const IcAssets* ic);

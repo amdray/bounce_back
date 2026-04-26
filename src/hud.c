@@ -105,15 +105,7 @@ void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* lif
     SDL_SetRenderDrawColor(renderer, HUD_COLOUR_R, HUD_COLOUR_G, HUD_COLOUR_B, 255);
     SDL_RenderFillRect(renderer, &blue);
 
-    int max_bonus = 0;
-    int speed_bonus = normalize_bonus_bar_units(state->speed_bonus_counter);
-    int grav_bonus = normalize_bonus_bar_units(state->grav_bonus_counter);
-    int jump_bonus = normalize_bonus_bar_units(state->jump_bonus_counter);
-    int stone_bonus = normalize_bonus_bar_units(state->stone_bonus_counter);
-    if (speed_bonus > max_bonus) max_bonus = speed_bonus;
-    if (grav_bonus > max_bonus) max_bonus = grav_bonus;
-    if (jump_bonus > max_bonus) max_bonus = jump_bonus;
-    if (stone_bonus > max_bonus) max_bonus = stone_bonus;
+    int bonus = normalize_bonus_bar_units(state->bonus_counter);
 
     if (tileset) {
         int remainingRings = state->total_rings - state->num_rings;
@@ -163,6 +155,6 @@ void hud_render(SDL_Renderer* renderer, const Tileset* tileset, SDL_Texture* lif
         int text_width = hud_font_measure_text(score_buffer, 9);
         int bonus_x = score_x + text_width + 10 + 30;
         int bonus_y = hudStartY + 4;
-        draw_bonus_bar(renderer, bonus_x, bonus_y, max_bonus);
+        draw_bonus_bar(renderer, bonus_x, bonus_y, bonus);
     }
 }

@@ -683,15 +683,20 @@ int main(int argc, char *argv[]) {
         object_renderer_draw(renderer, level, camera.x, camera.y);
         player_render(player, renderer, camera.x, camera.y);
         foreground_pass_draw(renderer, level, tile_meta, tile_anim, tileset, &fg, camera.x, camera.y);
+        int bonus_counter = 0;
+        if (player->has_speed_bonus || player->gravity_down || player->has_jump_bonus) {
+            bonus_counter = player->timer_b;
+        }
+        if (player->is_stone) {
+            bonus_counter = player->stone_timer;
+        }
+
         HudState hud = {
             .score = player->score,
             .num_lives = player->lives,
             .total_rings = level->hoops_total,
             .num_rings = level->hoops_total - level->hoops_remaining,
-            .speed_bonus_counter = player->has_speed_bonus ? player->timer_b : 0,
-            .grav_bonus_counter = player->has_grav_bonus ? player->timer_b : 0,
-            .jump_bonus_counter = player->has_jump_bonus ? player->timer_b : 0,
-            .stone_bonus_counter = player->is_stone ? player->stone_timer : 0,
+            .bonus_counter = bonus_counter,
         };
         SDL_Texture* hud_life_ball_icon = (player && player->ball_sprites && player->sprite_count > 0)
                                         ? player->ball_sprites[0]

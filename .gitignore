@@ -14,6 +14,7 @@ ENV/
 .idea/
 .DS_Store
 Thumbs.db
+.claude
 
 # Logs/temp
 *.log
@@ -41,3 +42,4 @@ PARAM.SFO
 src/res/
 original_code/
 other/
+job-logs.txt
