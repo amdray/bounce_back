@@ -3,7 +3,6 @@
  */
 
 #include "level_loader.h"
-#include "debug_log.h"
 #include "endian_utils.h"
 #include "resource_loader.h"
 #include "tile_transform.h"
@@ -637,11 +636,6 @@ void level_objects_tick(Level* level,
                     i5 += b4;
                 }
                 if (i5 == 0 || i5 == i14) {
-                    if (type == 2 && g_debug_log) {
-                        fprintf(g_debug_log,
-                                "lift.reverse idx=%u axis=y off=%d limit=%d speed=%d->%d\n",
-                                (unsigned)idx, i5, i14, b3, -b3);
-                    }
                     b3 = -b3;
                 }
             }

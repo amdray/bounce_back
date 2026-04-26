@@ -25,9 +25,6 @@
 #include "save.h"
 #include "sound.h"
 #include "game_constants.h"
-#include "debug_log.h"
-
-FILE* g_debug_log = NULL;
 
 static int clamp_campaign_level_count(int unlocked_level) {
     if (unlocked_level <= 0) {
@@ -50,17 +47,6 @@ static int get_next_campaign_level_index(int completed_level_index, bool one_go_
         return HIDDEN_LEVEL_INDEX;
     }
     return -1;
-}
-
-static double elapsed_seconds(uint64_t start_counter, uint64_t end_counter) {
-    uint64_t freq = SDL_GetPerformanceFrequency();
-    if (freq == 0) return 0.0;
-    return (double)(end_counter - start_counter) / (double)freq;
-}
-
-static void log_stage_time(FILE* log, const char* label, uint64_t start_counter, uint64_t end_counter) {
-    if (!log) return;
-    fprintf(log, "[load] %s: %.3f s\n", label, elapsed_seconds(start_counter, end_counter));
 }
 
 static void present_loading_splash(SDL_Renderer* renderer, int phase) {
@@ -127,38 +113,20 @@ static int reload_level_state(SDL_Renderer* sdl_renderer,
                               LevelRenderer** level_renderer,
                               Player** player,
                               Camera* camera,
-                              ExitDoorState* door,
-                              FILE* log) {
-    uint64_t reload_t0 = SDL_GetPerformanceCounter();
-    uint64_t t0 = SDL_GetPerformanceCounter();
+                              ExitDoorState* door) {
     Level* new_level = level_load("res/lf", new_level_index);
-    uint64_t t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "reload.level_load", t0, t1);
-    if (!new_level) {
-        if (log) fprintf(log, "Level switch failed: level %d load error\n", new_level_index);
-        return 0;
-    }
+    if (!new_level) return 0;
 
     ForegroundPass new_fg = (ForegroundPass){0};
-    t0 = SDL_GetPerformanceCounter();
     if (foreground_pass_build(new_level, &new_fg) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "reload.foreground_pass_build", t0, t1);
-        if (log) fprintf(log, "Level switch failed: foreground build error (level %d)\n", new_level_index);
         level_free(new_level);
         return 0;
     }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "reload.foreground_pass_build", t0, t1);
 
     char theme_path[32];
     snprintf(theme_path, sizeof(theme_path), "res/if%d", (int)new_level->theme_id);
-    t0 = SDL_GetPerformanceCounter();
     Tileset* new_tileset = tileset_load(sdl_renderer, "res/if0", theme_path);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "reload.tileset_load", t0, t1);
     if (!new_tileset) {
-        if (log) fprintf(log, "Level switch failed: tileset load error (%s)\n", theme_path);
         free(new_fg.front_tiles);
         level_free(new_level);
         return 0;
@@ -166,24 +134,16 @@ static int reload_level_state(SDL_Renderer* sdl_renderer,
 
     char bg_theme_path[32];
     snprintf(bg_theme_path, sizeof(bg_theme_path), "res/ib%d", (int)new_level->theme_id);
-    t0 = SDL_GetPerformanceCounter();
     BgLayer* new_bg = bg_layer_load(sdl_renderer, "res/bg", "res/ib0", bg_theme_path);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "reload.bg_layer_load", t0, t1);
     if (!new_bg) {
-        if (log) fprintf(log, "Level switch failed: bg layer load error (%s)\n", bg_theme_path);
         tileset_free(new_tileset);
         free(new_fg.front_tiles);
         level_free(new_level);
         return 0;
     }
 
-    t0 = SDL_GetPerformanceCounter();
     LevelRenderer* new_renderer = renderer_create(new_level, tile_meta, tile_anim, new_tileset);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "reload.renderer_create", t0, t1);
     if (!new_renderer) {
-        if (log) fprintf(log, "Level switch failed: renderer create error (level %d)\n", new_level_index);
         bg_layer_free(new_bg);
         tileset_free(new_tileset);
         free(new_fg.front_tiles);
@@ -191,12 +151,8 @@ static int reload_level_state(SDL_Renderer* sdl_renderer,
         return 0;
     }
 
-    t0 = SDL_GetPerformanceCounter();
     Player* new_player = player_create(sdl_renderer, new_level->spawn_x, new_level->spawn_y, new_level->ball_type != 0);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "reload.player_create", t0, t1);
     if (!new_player) {
-        if (log) fprintf(log, "Level switch failed: player create error (level %d)\n", new_level_index);
         renderer_free(new_renderer);
         bg_layer_free(new_bg);
         tileset_free(new_tileset);
@@ -225,11 +181,6 @@ static int reload_level_state(SDL_Renderer* sdl_renderer,
     door->open = false;
     sound_stop_all();
 
-    if (log) {
-        fprintf(log, "Level switched to %d: width=%u height=%u theme=%u\n",
-                *level_index, new_level->width, new_level->height, new_level->theme_id);
-        fprintf(log, "[load] reload.total: %.3f s\n", elapsed_seconds(reload_t0, SDL_GetPerformanceCounter()));
-    }
     return 1;
 }
 
@@ -248,8 +199,7 @@ static int restore_continue_state(SDL_Renderer* renderer,
                                   int* total_score,
                                   int* levels_done,
                                   bool* one_go_run,
-                                  uint32_t* level_start_ticks,
-                                  FILE* log) {
+                                  uint32_t* level_start_ticks) {
     SaveContinueState state = save_get_continue_state();
     uint32_t now = SDL_GetTicks();
 
@@ -266,7 +216,7 @@ static int restore_continue_state(SDL_Renderer* renderer,
         if (!reload_level_state(renderer, next_level_index,
                                 level_index, level, bg_layer, fg,
                                 tile_meta, tile_anim, tileset,
-                                level_renderer, player, camera, door, log)) {
+                                level_renderer, player, camera, door)) {
             return 0;
         }
         (*player)->lives = save_get_continue_lives();
@@ -282,7 +232,7 @@ static int restore_continue_state(SDL_Renderer* renderer,
         if (!reload_level_state(renderer, saved_level_index,
                                 level_index, level, bg_layer, fg,
                                 tile_meta, tile_anim, tileset,
-                                level_renderer, player, camera, door, log)) {
+                                level_renderer, player, camera, door)) {
             return 0;
         }
         if (!save_restore_game(*level, *player, door)) {
@@ -304,12 +254,9 @@ static int restore_continue_state(SDL_Renderer* renderer,
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
 
-    uint64_t startup_t0 = SDL_GetPerformanceCounter();
     int exit_code = 1;
     bool bootstrap_complete = false;
 
-    FILE* log = fopen("debug.log", "w");
-    g_debug_log = log;
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     Level* level = NULL;
@@ -337,217 +284,82 @@ int main(int argc, char *argv[]) {
     MenuLevelSelectState level_select = { .selection = 0, .top_index = 0, .level_count = 1 };
     MenuOverlayData overlay = {0};
 
-    if (log) fprintf(log, "=== Bounce Back Debug ===\n");
-
-    uint64_t t0 = SDL_GetPerformanceCounter();
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) < 0) {
-        if (log) fprintf(log, "SDL_Init failed: %s\n", SDL_GetError());
         goto cleanup;
     }
-    uint64_t t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "SDL_Init", t0, t1);
-    if (log) fprintf(log, "SDL2 OK\n");
 
-    {
-        t0 = SDL_GetPerformanceCounter();
-        int snd_result = sound_init();
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "sound_init", t0, t1);
-        if (log) fprintf(log, "sound_init returned %d%s\n", snd_result,
-                         snd_result == 1 ? " (OK)" : " (no sound)");
-    }
+    sound_init();
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 
-    t0 = SDL_GetPerformanceCounter();
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
-        if (log) fprintf(log, "IMG_Init failed: %s\n", IMG_GetError());
         goto cleanup;
     }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "IMG_Init", t0, t1);
-    if (log) fprintf(log, "SDL2_image OK\n");
 
-    t0 = SDL_GetPerformanceCounter();
     window = SDL_CreateWindow("Bounce Back", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
-    if (!window) {
-        if (log) fprintf(log, "CreateWindow failed: %s\n", SDL_GetError());
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "SDL_CreateWindow", t0, t1);
-    if (log) fprintf(log, "Window OK\n");
+    if (!window) goto cleanup;
 
-    t0 = SDL_GetPerformanceCounter();
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) {
-        if (log) fprintf(log, "CreateRenderer failed: %s\n", SDL_GetError());
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "SDL_CreateRenderer", t0, t1);
-    if (log) fprintf(log, "Renderer OK\n");
+    if (!renderer) goto cleanup;
 
     input_init();
-
-    t0 = SDL_GetPerformanceCounter();
     menu_init(renderer);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "menu_init", t0, t1);
-
-    t0 = SDL_GetPerformanceCounter();
     (void)save_init();
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "save_init", t0, t1);
     present_loading_splash_for(renderer, 0, SPLASH_PHASE_MS);
 
     uint32_t splash_phase2_start = SDL_GetTicks();
     sound_play(SND_MENU_SPLASH);
     present_loading_splash(renderer, 1);
 
-    t0 = SDL_GetPerformanceCounter();
-    if (game_assets_init(&assets, renderer, log) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "game_assets_init", t0, t1);
-        if (log) fprintf(log, "Failed to load shared assets (res/ic)\n");
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "game_assets_init", t0, t1);
+    if (game_assets_init(&assets, renderer) != 0) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     level = level_load("res/lf", level_index);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "level_load", t0, t1);
-    if (!level) {
-        if (log) fprintf(log, "Failed to load res/lf level %d\n", level_index);
-        goto cleanup;
-    }
-    if (log) fprintf(log, "Level %d loaded: width=%u height=%u theme=%u\n", level_index, level->width, level->height, level->theme_id);
+    if (!level) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
-    if (foreground_pass_build(level, &fg) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "foreground_pass_build", t0, t1);
-        if (log) fprintf(log, "Failed to build foreground pass\n");
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "foreground_pass_build", t0, t1);
+    if (foreground_pass_build(level, &fg) != 0) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     tile_meta = tilemetadata_load("res/tf");
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "tilemetadata_load", t0, t1);
-    if (!tile_meta) {
-        if (log) fprintf(log, "Failed to load res/tf\n");
-        goto cleanup;
-    }
-    if (log) fprintf(log, "TileMetadata loaded: 127 tiles\n");
+    if (!tile_meta) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     tile_anim = animation_load("res/tf");
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "animation_load", t0, t1);
-    if (!tile_anim) {
-        if (log) fprintf(log, "Failed to load tile animation\n");
-        goto cleanup;
-    }
+    if (!tile_anim) goto cleanup;
 
     char theme_path[32];
     snprintf(theme_path, sizeof(theme_path), "res/if%d", (int)level->theme_id);
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     tileset = tileset_load(renderer, "res/if0", theme_path);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "tileset_load", t0, t1);
-    if (!tileset) {
-        if (log) fprintf(log, "Failed to load tileset res/if0 + %s\n", theme_path);
-        goto cleanup;
-    }
-    if (log) fprintf(log, "Tileset loaded: 104 base + 7 theme textures\n");
+    if (!tileset) goto cleanup;
 
     char bg_theme_path[32];
     snprintf(bg_theme_path, sizeof(bg_theme_path), "res/ib%d", (int)level->theme_id);
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     bg_layer = bg_layer_load(renderer, "res/bg", "res/ib0", bg_theme_path);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "bg_layer_load", t0, t1);
-    if (!bg_layer) {
-        if (log) fprintf(log, "Failed to load bg layer res/bg + res/ib0 + %s\n", bg_theme_path);
-        goto cleanup;
-    }
+    if (!bg_layer) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     level_renderer = renderer_create(level, tile_meta, tile_anim, tileset);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "renderer_create", t0, t1);
-    if (!level_renderer) {
-        if (log) fprintf(log, "Failed to create LevelRenderer\n");
-        goto cleanup;
-    }
+    if (!level_renderer) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
     player = player_create(renderer, level->spawn_x, level->spawn_y, level->ball_type != 0);
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "player_create", t0, t1);
-    if (!player) {
-        if (log) fprintf(log, "Failed to create player\n");
-        goto cleanup;
-    }
-    if (log) fprintf(log, "Player created at (%d, %d)\n", player->x_pos, player->y_pos);
+    if (!player) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
-    if (hud_init(renderer, &assets.ic) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "hud_init", t0, t1);
-        if (log) fprintf(log, "Failed to init HUD\n");
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "hud_init", t0, t1);
+    if (hud_init(renderer, &assets.ic) != 0) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
-    if (object_renderer_init(&assets.ic) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "object_renderer_init", t0, t1);
-        if (log) fprintf(log, "Failed to init object renderer\n");
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "object_renderer_init", t0, t1);
+    if (object_renderer_init(&assets.ic) != 0) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
-    if (exit_door_renderer_init(&assets.ic) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "exit_door_renderer_init", t0, t1);
-        if (log) fprintf(log, "Failed to init exit door renderer\n");
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "exit_door_renderer_init", t0, t1);
+    if (exit_door_renderer_init(&assets.ic) != 0) goto cleanup;
 
     present_loading_splash(renderer, 1);
-    t0 = SDL_GetPerformanceCounter();
-    if (foreground_pass_init(&assets.ic) != 0) {
-        t1 = SDL_GetPerformanceCounter();
-        log_stage_time(log, "foreground_pass_init", t0, t1);
-        if (log) fprintf(log, "Failed to init foreground pass\n");
-        goto cleanup;
-    }
-    t1 = SDL_GetPerformanceCounter();
-    log_stage_time(log, "foreground_pass_init", t0, t1);
+    if (foreground_pass_init(&assets.ic) != 0) goto cleanup;
 
     Input splash_input = {0};
     while (SDL_GetTicks() - splash_phase2_start < SPLASH_PHASE_MS) {
@@ -564,7 +376,6 @@ int main(int argc, char *argv[]) {
     }
     present_startup_menu_intro(renderer, &menu_main);
     input_sync(&input);
-    if (log) fprintf(log, "[load] startup.total: %.3f s\n", elapsed_seconds(startup_t0, SDL_GetPerformanceCounter()));
     camera_init(&camera);
     camera_reset(&camera, level->width, level->height);
     door.I = 0;
@@ -606,7 +417,7 @@ int main(int argc, char *argv[]) {
                 if (!restore_continue_state(renderer, &level_index, &level, &bg_layer, &fg,
                                             tile_meta, tile_anim, &tileset,
                                             &level_renderer, &player, &camera, &door,
-                                            &total_score, &levels_done, &one_go_run, &level_start_ticks, log)) {
+                                            &total_score, &levels_done, &one_go_run, &level_start_ticks)) {
                     menu_main.has_save = save_has_continue();
                     continue;
                 }
@@ -644,7 +455,7 @@ int main(int argc, char *argv[]) {
                 if (reload_level_state(renderer, level_select.selection,
                                        &level_index, &level, &bg_layer, &fg,
                                        tile_meta, tile_anim, &tileset,
-                                       &level_renderer, &player, &camera, &door, log)) {
+                                       &level_renderer, &player, &camera, &door)) {
                     player->lives = 3;
                     level_start_ticks = SDL_GetTicks();
                 }
@@ -675,7 +486,7 @@ int main(int argc, char *argv[]) {
                     reload_level_state(renderer, next_level_index,
                                        &level_index, &level, &bg_layer, &fg,
                                        tile_meta, tile_anim, &tileset,
-                                       &level_renderer, &player, &camera, &door, log)) {
+                                       &level_renderer, &player, &camera, &door)) {
                     player->lives = preserved_lives;
                     level_start_ticks = SDL_GetTicks();
                 }
@@ -726,7 +537,7 @@ int main(int argc, char *argv[]) {
                     reload_level_state(renderer, next_level_index,
                                        &level_index, &level, &bg_layer, &fg,
                                        tile_meta, tile_anim, &tileset,
-                                       &level_renderer, &player, &camera, &door, log)) {
+                                       &level_renderer, &player, &camera, &door)) {
                     player->lives = preserved_lives;
                     level_start_ticks = SDL_GetTicks();
                 }
@@ -763,13 +574,6 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        if (log) {
-            if (input.jump && !input.down && player->is_grounded) {
-                fprintf(log, "jump=%d\n", JUMP_NORMAL);
-                fprintf(log, "ySpeed=%d\n", JUMP_NORMAL);
-            }
-        }
-
         level_objects_tick(level,
                            player->x_pos - player->half_width - 1,
                            player->y_pos - player->half_height - 1,
@@ -790,13 +594,6 @@ int main(int argc, char *argv[]) {
             total_score += stage_bonus;
             levels_done++;
 
-            if (log) {
-                fprintf(log,
-                        "LEVEL_COMPLETE level=%d timer_ms=%lu score=%d bonus=%d total=%d\n",
-                        level_index, (unsigned long)level_timer_ms,
-                        player->score, stage_bonus, total_score);
-            }
-
             overlay = (MenuOverlayData){
                 .level_index   = level_index,
                 .level_points  = player->score,
@@ -809,8 +606,6 @@ int main(int argc, char *argv[]) {
             save_update_unlocked_level(level_index + 2);
 
             if (level_index == REGULAR_LEVEL_COUNT - 1) {
-                if (log) fprintf(log, "SPECIAL_CONGRATULATIONS level=%d one_go=%d\n",
-                                 level_index, one_go_run ? 1 : 0);
                 if (one_go_run) {
                     save_capture_level_complete(level_index, player->lives, levels_done, total_score, true,
                                                 level, player, &door);
@@ -828,7 +623,6 @@ int main(int argc, char *argv[]) {
             }
 
             if (level_index == HIDDEN_LEVEL_INDEX) {
-                if (log) fprintf(log, "FINAL_CONGRATULATIONS\n");
                 save_insert_record(total_score);
                 save_clear_continue();
                 save_flush();
@@ -852,7 +646,6 @@ int main(int argc, char *argv[]) {
 
         /* ── Game Over: lives exhausted ──────────────────── */
         if (player->lives <= 0) {
-            if (log) fprintf(log, "GAME_OVER\n");
             overlay = (MenuOverlayData){
                 .level_index = level_index,
                 .lives_done  = levels_done,
@@ -869,7 +662,7 @@ int main(int argc, char *argv[]) {
             if (reload_level_state(renderer, DEFAULT_LEVEL_INDEX,
                                    &level_index, &level, &bg_layer, &fg,
                                    tile_meta, tile_anim, &tileset,
-                                   &level_renderer, &player, &camera, &door, log)) {
+                                   &level_renderer, &player, &camera, &door)) {
                 player->lives = 3;
                 level_start_ticks = SDL_GetTicks();
             }
@@ -922,10 +715,6 @@ cleanup:
     }
     save_shutdown();
 
-    if (log) {
-        fprintf(log, "Shutdown %s\n", exit_code == 0 ? "OK" : "FAILED");
-        fclose(log);
-    }
     menu_shutdown();
     input_cleanup();
     foreground_pass_shutdown();

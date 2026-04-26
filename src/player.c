@@ -3,7 +3,6 @@
  */
 
 #include "player.h"
-#include "debug_log.h"
 #include "resource_loader.h"
 #include "sound.h"
 
@@ -149,8 +148,8 @@ static void player_apply_moving_toward_support_default(Player* p, Level* level, 
                                                         int step_y, bool jump_hold,
                                                         int tx, int ty, uint8_t id_logic,
                                                         int* out_prev_y_speed, int* out_y_speed,
-                                                        bool* out_stop_scan, bool* out_restart_hits) {
-    if (!p || !level || !out_prev_y_speed || !out_y_speed || !out_stop_scan || !out_restart_hits) return;
+                                                        bool* out_stop_scan) {
+    if (!p || !level || !out_prev_y_speed || !out_y_speed || !out_stop_scan) return;
 
     int probe_y = p->y_pos + step_y;
     *out_prev_y_speed = 0;
@@ -209,7 +208,6 @@ static void player_apply_moving_toward_support_default(Player* p, Level* level, 
                 player_kill(p);
             }
         }
-        *out_restart_hits = true;
         return;
     }
 
@@ -233,7 +231,6 @@ static void player_apply_moving_toward_support_default(Player* p, Level* level, 
                 player_kill(p);
             }
         }
-        *out_restart_hits = true;
     }
 }
 
@@ -1026,8 +1023,6 @@ void player_update(Player* p, Level* level, Input* input) {
             uint8_t hit_id = 0;
             uint8_t id_logic = 0;
             bool run_moving_toward_support_default = false;
-            bool restart_hits = false;
-
             if (tx >= 0 && ty >= 0) {
                 hit_id = (uint8_t)(level_get_tile(level, tx, ty) & 0x7F);
                 id_logic = hit_id;
@@ -1349,17 +1344,6 @@ void player_update(Player* p, Level* level, Input* input) {
                             int obj_w = (level->objects.ao[obj] == 2) ? 24 : ((level->objects.ao[obj] == 0) ? 32 : 16);
                             int sv = level->objects.s[obj][0];
                             int sh = level->objects.s[obj][1];
-                            if (level->objects.ao[obj] == 2 && g_debug_log) {
-                                fprintf(g_debug_log,
-                                    "lift.case200.up obj=%d pos=(%d,%d) top=%d left=%d sv=%d sh=%d grounded=%d toward=1 carrier=%d grav=%d hh=%d mh=%d hw=%d mw=%d shw=%d shh=%d mwf=%d mhf=%d\n",
-                                        obj, p->x_pos, p->y_pos, top, left, sv, sh,
-                                        p->is_grounded ? 1 : 0, p->carrier_object_index,
-                                        p->gravity_down ? 1 : 0,
-                                        p->half_height, p->mask_half_h,
-                                    p->half_width, p->mask_half_w,
-                                    p->sprite_width, p->sprite_height,
-                                    p->mask_w, p->mask_h);
-                            }
                             if (sh != 0) {
                                 if ((!p->gravity_down && p->y_pos - p->half_height >= top) ||
                                     (p->gravity_down && p->y_pos + p->half_height <= top + obj_h)) {
@@ -1369,11 +1353,6 @@ void player_update(Player* p, Level* level, Input* input) {
                                                                     target_y - p->mask_half_h,
                                                                     p->mask_w, p->mask_h,
                                                                     p->active_mask, false, NULL)) {
-                                        if (level->objects.ao[obj] == 2 && g_debug_log) {
-                                            fprintf(g_debug_log,
-                                                    "lift.up.snap-away obj=%d y=%d->%d top=%d sh=%d\n",
-                                                    obj, p->y_pos, target_y, top, sh);
-                                        }
                                         p->y_pos = target_y;
                                         j = 30;
                                         bool4 = true;
@@ -1392,11 +1371,6 @@ void player_update(Player* p, Level* level, Input* input) {
                                     goto player_update_cleanup;
                                 }
                                 if (jump_hold) {
-                                    if (level->objects.ao[obj] == 2 && g_debug_log) {
-                                        fprintf(g_debug_log,
-                                                "lift.up.jump obj=%d pos=(%d,%d) top=%d sh=%d\n",
-                                                obj, p->x_pos, p->y_pos, top, sh);
-                                    }
                                     j = calculate_jump_strength(p);
                                     p->is_grounded = false;
                                     if (!p->stunned) {
@@ -1413,11 +1387,6 @@ void player_update(Player* p, Level* level, Input* input) {
                                                                     p->mask_w, p->mask_h,
                                                                     p->active_mask, true,
                                                                     &active_object_index)) {
-                                        if (level->objects.ao[obj] == 2 && g_debug_log) {
-                                            fprintf(g_debug_log,
-                                                    "lift.up.carry obj=%d y=%d->%d top=%d sh=%d\n",
-                                                    obj, p->y_pos, target_y, top, sh);
-                                        }
                                         p->y_pos = target_y;
                                         y_pixels = 0;
                                         j = 30;
@@ -1438,11 +1407,6 @@ void player_update(Player* p, Level* level, Input* input) {
                                         player_kill(p);
                                         goto player_update_cleanup;
                                     }
-                                }
-                                if (level->objects.ao[obj] == 2 && g_debug_log) {
-                                    fprintf(g_debug_log,
-                                            "lift.up.noop obj=%d pos=(%d,%d) top=%d sh=%d grounded=%d\n",
-                                            obj, p->x_pos, p->y_pos, top, sh, p->is_grounded ? 1 : 0);
                                 }
                                 run_moving_toward_support_default = true;
                             } else if (sv != 0) {
@@ -1529,18 +1493,14 @@ void player_update(Player* p, Level* level, Input* input) {
                         player_apply_moving_toward_support_default(p, level, &hits,
                                                                     step_y, jump_hold,
                                                                     tx, ty, id_logic,
-                                                                    &k, &j, &bool4, &restart_hits);
+                                                                    &k, &j, &bool4);
                         break;
                 }
                 if (run_moving_toward_support_default) {
                     player_apply_moving_toward_support_default(p, level, &hits,
                                                                 step_y, jump_hold,
                                                                 tx, ty, id_logic,
-                                                                &k, &j, &bool4, &restart_hits);
-                }
-                if (restart_hits) {
-                    h = -1;
-                    bool4 = false;
+                                                                &k, &j, &bool4);
                 }
             } else {
                 if (!p->gravity_down) {
@@ -1600,18 +1560,6 @@ void player_update(Player* p, Level* level, Input* input) {
                             int obj_w = (level->objects.ao[obj] == 2) ? 24 : ((level->objects.ao[obj] == 0) ? 32 : 16);
                             int sv = level->objects.s[obj][0];
                             int sh = level->objects.s[obj][1];
-                            if (level->objects.ao[obj] == 2 && g_debug_log) {
-                                fprintf(g_debug_log,
-                                    "lift.case200.down obj=%d pos=(%d,%d) top=%d left=%d sv=%d sh=%d grounded=%d toward=0 carrier=%d h=%d next_hit=%d grav=%d hh=%d mh=%d hw=%d mw=%d shw=%d shh=%d mwf=%d mhf=%d\n",
-                                        obj, p->x_pos, p->y_pos, top, left, sv, sh,
-                                        p->is_grounded ? 1 : 0, p->carrier_object_index,
-                                        h, (h + 1 < COLLISION_HITS_MAX && hits.x[h + 1] != -1) ? 1 : 0,
-                                        p->gravity_down ? 1 : 0,
-                                        p->half_height, p->mask_half_h,
-                                    p->half_width, p->mask_half_w,
-                                    p->sprite_width, p->sprite_height,
-                                    p->mask_w, p->mask_h);
-                            }
                             if (sh != 0) {
                                 if ((!p->gravity_down && p->y_pos - p->half_height <= top) ||
                                     (p->gravity_down && p->y_pos + p->half_height >= top + obj_h)) {

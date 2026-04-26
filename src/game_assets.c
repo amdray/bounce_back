@@ -30,16 +30,13 @@ static SDL_Texture* decode_ic_entry(SDL_Renderer* renderer,
 
 /* ── public API ────────────────────────────────────────────────────────── */
 
-int game_assets_init(GameAssets* assets, SDL_Renderer* renderer, FILE* log)
+int game_assets_init(GameAssets* assets, SDL_Renderer* renderer)
 {
     if (!assets || !renderer) return -1;
     memset(assets, 0, sizeof(*assets));
 
     ResourceContainer* ic = resource_load("res/ic");
-    if (!ic) {
-        if (log) fprintf(log, "game_assets_init: failed to load res/ic\n");
-        return -1;
-    }
+    if (!ic) return -1;
 
     assets->ic.lives_strip = decode_ic_entry(renderer, ic, 1);
     assets->ic.ring_icon   = decode_ic_entry(renderer, ic, 2);
@@ -49,31 +46,19 @@ int game_assets_init(GameAssets* assets, SDL_Renderer* renderer, FILE* log)
     for (int i = 0; i < 4; i++)
         assets->ic.object_sprite[i] = decode_ic_entry(renderer, ic, 8 + i);
 
-    /* The raw container is only needed for decoding; release it now. */
     resource_free(ic);
 
-    /* Validate mandatory textures — hoop, door, and moving object sprites are required
-     * for correct gameplay rendering.  HUD textures (lives_strip, ring_icon)
-     * are optional: the draw functions already guard for NULL. */
     for (int i = 0; i < 4; i++) {
-        if (!assets->ic.hoop[i]) {
-            if (log) fprintf(log, "game_assets_init: missing ic[%d] (hoop)\n", 3 + i);
-            game_assets_shutdown(assets);
-            return -1;
-        }
-        if (!assets->ic.object_sprite[i]) {
-            if (log) fprintf(log, "game_assets_init: missing ic[%d] (object sprite)\n", 8 + i);
+        if (!assets->ic.hoop[i] || !assets->ic.object_sprite[i]) {
             game_assets_shutdown(assets);
             return -1;
         }
     }
     if (!assets->ic.door) {
-        if (log) fprintf(log, "game_assets_init: missing ic[7] (door)\n");
         game_assets_shutdown(assets);
         return -1;
     }
 
-    if (log) fprintf(log, "game_assets_init: res/ic decoded (11 textures)\n");
     return 0;
 }
 

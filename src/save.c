@@ -1,6 +1,5 @@
 #include "save.h"
 
-#include "debug_log.h"
 #include "endian_utils.h"
 
 #include <pspdisplay.h>
@@ -57,69 +56,8 @@ static int g_save_last_load_result = 0;
 static int g_save_last_save_result = 0;
 static size_t g_save_last_loaded_size = 0;
 
-static const char* save_continue_state_name(SaveContinueState state) {
-    switch (state) {
-        case SAVE_CONTINUE_NONE: return "NONE";
-        case SAVE_CONTINUE_GAME: return "GAME";
-        case SAVE_CONTINUE_LEVEL_COMPLETE: return "LEVEL_COMPLETE";
-        default: return "UNKNOWN";
-    }
-}
-
-static void save_log_snapshot(const char* tag, size_t blob_size) {
-    if (!g_debug_log) return;
-    fprintf(g_debug_log,
-            "[save] %s blob=%lu state=%s level=%d lives=%d levels_done=%d total_score=%d "
-            "elapsed_ms=%lu one_go=%d level_score=%d door_I=%d door_open=%d hoops=%d "
-            "modified_tiles=%d objects=%d player={x=%d y=%d spawn_x=%d spawn_y=%d x_speed=%d y_speed=%d "
-            "bounce=%d prev_y=%d stone_timer=%d timer_a=%d timer_b=%d grounded=%d stone=%d inverted=%d gravity_down=%d "
-            "stunned=%d state_a=%d state_r=%d sprite=%d}\n",
-            tag,
-            (unsigned long)blob_size,
-            save_continue_state_name(g_save.continue_state),
-            g_save.continue_level_index,
-            g_save.continue_lives,
-            g_save.continue_levels_done,
-            g_save.continue_total_score,
-            (unsigned long)g_save.continue_level_elapsed_ms,
-            g_save.continue_one_go ? 1 : 0,
-            g_save.current_level_score,
-            g_save.door_i,
-            g_save.door_open ? 1 : 0,
-            g_save.hoops_remaining,
-            g_save.modified_tile_count,
-            g_save.object_count,
-            g_save.player.x_pos,
-            g_save.player.y_pos,
-            g_save.player.spawn_tile_x,
-            g_save.player.spawn_tile_y,
-            g_save.player.x_speed,
-            g_save.player.y_speed,
-            g_save.player.bounce_state,
-            g_save.player.prev_y_speed,
-            g_save.player.stone_timer,
-            g_save.player.timer_a,
-            g_save.player.timer_b,
-            g_save.player.is_grounded ? 1 : 0,
-            g_save.player.is_stone ? 1 : 0,
-            g_save.player.is_inverted ? 1 : 0,
-            g_save.player.gravity_down ? 1 : 0,
-            g_save.player.stunned ? 1 : 0,
-            g_save.player.state_a,
-            g_save.player.state_r,
-            g_save.player.sprite_index);
-    fflush(g_debug_log);
-}
-
 static bool save_unpack_fail(const char* reason, size_t offset, size_t size) {
-    if (g_debug_log) {
-        fprintf(g_debug_log,
-                "[save] load.unpack_failed reason=%s offset=%lu size=%lu\n",
-                reason,
-                (unsigned long)offset,
-                (unsigned long)size);
-        fflush(g_debug_log);
-    }
+    (void)reason; (void)offset; (void)size;
     return false;
 }
 
@@ -496,7 +434,6 @@ static bool save_unpack_blob(const uint8_t* buf, size_t size) {
         }
     }
 
-    save_log_snapshot("load.ok", size);
     return true;
 }
 
@@ -590,24 +527,11 @@ int save_init(void) {
             loaded_size = buf_size;
         }
         if (!save_unpack_blob(buf, loaded_size)) {
-            if (g_debug_log) {
-                fprintf(g_debug_log,
-                        "[save] load.parse_failed loaded_size=%lu result=0x%08X\n",
-                        (unsigned long)loaded_size,
-                        (unsigned)g_save_last_load_result);
-                fflush(g_debug_log);
-            }
             save_state_reset_defaults();
             g_save_initialized = true;
             g_save_dirty = true;
             save_flush();
             g_save_initialized = false;
-        } else if (g_debug_log) {
-            fprintf(g_debug_log,
-                    "[save] load.found loaded_size=%lu result=0x%08X\n",
-                    (unsigned long)loaded_size,
-                    (unsigned)g_save_last_load_result);
-            fflush(g_debug_log);
         }
         g_save_initialized = true;
         free(buf);
@@ -615,10 +539,6 @@ int save_init(void) {
     }
 
     if (g_save_last_load_result == (int)SAVE_ERR_RW_NO_DATA) {
-        if (g_debug_log) {
-            fprintf(g_debug_log, "[save] load.no_data result=0x%08X\n", (unsigned)g_save_last_load_result);
-            fflush(g_debug_log);
-        }
         g_save_initialized = true;
         g_save_dirty = true;
         save_flush();
@@ -627,10 +547,6 @@ int save_init(void) {
     }
 
     free(buf);
-    if (g_debug_log) {
-        fprintf(g_debug_log, "[save] load.failed result=0x%08X\n", (unsigned)g_save_last_load_result);
-        fflush(g_debug_log);
-    }
     save_state_reset_defaults();
     return 0;
 }
@@ -648,22 +564,8 @@ void save_flush(void) {
 
     if (!g_save_initialized || !g_save_dirty) return;
     if (!save_pack_blob(&buf, &size)) return;
-    save_log_snapshot("store.begin", size);
     if (save_store_data_buffer(buf, size)) {
         g_save_dirty = false;
-        if (g_debug_log) {
-            fprintf(g_debug_log,
-                    "[save] store.ok blob=%lu result=0x%08X\n",
-                    (unsigned long)size,
-                    (unsigned)g_save_last_save_result);
-            fflush(g_debug_log);
-        }
-    } else if (g_debug_log) {
-        fprintf(g_debug_log,
-                "[save] store.failed blob=%lu result=0x%08X\n",
-                (unsigned long)size,
-                (unsigned)g_save_last_save_result);
-        fflush(g_debug_log);
     }
     free(buf);
 }

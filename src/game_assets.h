@@ -44,10 +44,9 @@ typedef struct {
  *
  * @param assets   Output struct (must not be NULL).
  * @param renderer SDL renderer used to create textures.
- * @param log      Optional log file (may be NULL).
  * @return 0 on success, -1 on failure.
  */
-int  game_assets_init(GameAssets* assets, SDL_Renderer* renderer, FILE* log);
+int  game_assets_init(GameAssets* assets, SDL_Renderer* renderer);
 
 /**
  * Destroy all textures owned by GameAssets.
